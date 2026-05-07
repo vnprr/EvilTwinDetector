@@ -132,6 +132,18 @@ class RuntimeAPITest(unittest.TestCase):
         self.assertEqual(response.json()["limit"], 1)
         self.assertEqual(len(response.json()["items"]), 1)
 
+    def test_global_timeline_endpoint_returns_recent_events(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            state_path = Path(directory) / "runtime.db"
+            self._seed_correlated_fixture(state_path)
+            client = TestClient(create_app(state_path=state_path, cors_origins=()))
+
+            response = client.get("/api/timeline", params={"limit": 2})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertLessEqual(response.json()["count"], 2)
+        self.assertTrue(response.json()["items"])
+
     @staticmethod
     def _seed_correlated_fixture(state_path: Path) -> None:
         payload = analyze_pcap(FIXTURE_DIR / "correlated_duplicate_deauth.pcap")

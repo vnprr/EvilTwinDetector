@@ -12,3 +12,5 @@ __pycache__/
 data/raw/
 data/processed/
 .wiguard/
+dashboard/node_modules/
+dashboard/dist/

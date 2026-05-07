@@ -108,11 +108,32 @@ Useful endpoints:
 - `GET /api/aps/{bssid}`
 - `GET /api/aps/{bssid}/timeline`
 - `GET /api/alerts`
+- `GET /api/alerts/{alert_key}`
 - `GET /api/events`
+- `GET /api/timeline`
 - `GET /api/stats`
 - `WS /ws/live`
 
 The API does not start active verification, change thresholds, or touch Wi-Fi interfaces. It only reads persisted runtime state and initializes an empty schema if the database does not exist yet.
+
+## Run The Operator Dashboard
+
+The dashboard is a read-only React operator console backed by `wiguard-api`.
+
+```bash
+cd dashboard
+npm install
+npm run dev -- --host 127.0.0.1
+```
+
+The frontend reads `VITE_WIGUARD_API_BASE`, defaulting to `http://127.0.0.1:8765`. For a local demo with synthetic data:
+
+```bash
+.venv/bin/python experiments/create_dashboard_demo_db.py --output /tmp/wiguard_dashboard_demo.db
+.venv/bin/wiguard-api --state-path /tmp/wiguard_dashboard_demo.db --host 127.0.0.1 --port 8765
+```
+
+Then open the Vite URL from `npm run dev`. The first screen is the operator dashboard: AP overview, alert inspection, AP detail, and live activity timeline.
 
 ## Analyze A PCAP
 

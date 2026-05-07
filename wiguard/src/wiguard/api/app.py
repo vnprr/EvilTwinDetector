@@ -156,6 +156,19 @@ def create_app(
                 "items": items,
             }
 
+    @app.get("/api/timeline")
+    def timeline(
+        limit: Annotated[int, Query(ge=1, le=500)] = 100,
+        after_id: Annotated[int | None, Query(ge=0)] = None,
+        bssid: str | None = None,
+    ) -> dict[str, object]:
+        with _store(app) as store:
+            items = store.timeline_events(bssid=bssid, after_id=after_id, limit=limit)
+            return {
+                "count": len(items),
+                "items": items,
+            }
+
     @app.websocket("/ws/live")
     async def live(
         websocket: WebSocket,

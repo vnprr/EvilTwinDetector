@@ -384,3 +384,44 @@ Notes:
 
 - API remains intentionally read-first: no active verification, no threshold changes, and no Wi-Fi interface operations.
 - This is the backend contract the dashboard should use next.
+
+## 2026-05-07 — Etap 4B, Read-Only Operator Dashboard MVP
+
+- Installed Node.js 22 LTS from NodeSource because the system did not have `node` or `npm`.
+- Added a React + TypeScript + Vite dashboard under `dashboard/`.
+- Added frontend dependencies:
+  - `react`,
+  - `react-dom`,
+  - `vite`,
+  - `typescript`,
+  - `lucide-react`,
+  - `recharts`.
+- Added local dashboard config through `.env.example` with `VITE_WIGUARD_API_BASE=http://127.0.0.1:8765`.
+- Added a read-only operator console with:
+  - AP overview table,
+  - runtime KPI bar,
+  - alert list with classification/status filters,
+  - alert evidence panel,
+  - AP detail view,
+  - live activity timeline over `WS /ws/live` with REST fallback.
+- Added `GET /api/timeline` as a small read-only API extension for the dashboard fallback path.
+- Added a demo-data workflow in `experiments/create_dashboard_demo_db.py` that replays a synthetic fixture into SQLite.
+- Updated `.gitignore` for dashboard build/runtime artifacts.
+- Updated README with dashboard and demo workflow commands.
+
+Validation:
+
+- Backend `python -m unittest discover -s tests`: passing, 49 tests.
+- Detection benchmark `wiguard-evaluate-fixtures tests/pcap_fixtures/synthetic/manifest.json`: passing, 5/5 scenarios.
+- Frontend `npm install`: complete, 0 vulnerabilities.
+- Frontend `npm run typecheck`: passing.
+- Frontend `npm run build`: passing; Vite reports one non-blocking chunk-size warning for the MVP bundle.
+- Demo DB smoke: `experiments/create_dashboard_demo_db.py --output /tmp/wiguard_dashboard_demo.db` produced 1 AP, 51 raw events, and 1 correlated `evil_twin` alert.
+- Runtime API smoke: `GET /api/health`, `GET /api/aps`, `GET /api/alerts`, and `GET /api/timeline?limit=5` returned expected demo data.
+- Dashboard smoke: Vite served `WiGuard Operator Dashboard` at `http://127.0.0.1:5173/` against the local API at `http://127.0.0.1:8765`.
+
+Notes:
+
+- Current subpoint: `Etap 4B — Read-Only Operator Dashboard MVP`.
+- Dashboard is intentionally read-only; acknowledgement, config changes, and active verification remain later stages.
+- The UI uses plain CSS for the MVP to keep the frontend stack controllable before adding a component system.
