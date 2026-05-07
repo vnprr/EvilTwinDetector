@@ -9,7 +9,12 @@ from pathlib import Path
 from scapy.all import rdpcap
 
 from wiguard.correlation import CorrelationEngine, events_from_alerts
-from wiguard.detection import DeauthStormDetector, EnvironmentAnomalyDetector
+from wiguard.detection import (
+    APIdentityVerifier,
+    DeauthStormDetector,
+    EnvironmentAnomalyDetector,
+    IdentityBaselineStore,
+)
 from wiguard.features import APFeatureStateManager, FeatureExtractor, ManagementFrameCounter
 
 
@@ -18,7 +23,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("pcap", type=Path, help="pcap/pcapng file to analyze")
     parser.add_argument("--min-clock-samples", type=int, default=5, help="minimum samples for clock-skew estimate")
     parser.add_argument("--window-size", type=int, default=300, help="rolling window size")
+    parser.add_argument("--identity-baseline", type=Path, default=None, help="trusted AP identity baseline JSON path")
+    parser.add_argument("--identity-learn", action="store_true", help="learn or refresh trusted identity baselines from this pcap")
+    parser.add_argument("--identity-min-baseline-frames", type=int, default=50, help="minimum frames required to learn an identity baseline")
+    parser.add_argument("--identity-clock-skew-delta-ppm", type=float, default=5.0, help="clock-skew delta threshold for identity alerts")
+    parser.add_argument("--identity-rssi-shift-db", type=float, default=12.0, help="RSSI shift threshold for identity alerts")
     args = parser.parse_args(argv)
+    if args.identity_learn and args.identity_baseline is None:
+        parser.error("--identity-learn requires --identity-baseline")
 
     extractor = FeatureExtractor()
     ap_state = APFeatureStateManager(
@@ -29,6 +41,19 @@ def main(argv: list[str] | None = None) -> int:
     deauth_detector = DeauthStormDetector()
     environment_detector = EnvironmentAnomalyDetector()
     correlation_engine = CorrelationEngine()
+    identity_store = IdentityBaselineStore(args.identity_baseline) if args.identity_baseline else None
+    identity_baselines = identity_store.load() if identity_store is not None else ()
+    identity_verifier = (
+        APIdentityVerifier(
+            min_baseline_frames=args.identity_min_baseline_frames,
+            clock_skew_delta_ppm=args.identity_clock_skew_delta_ppm,
+            rssi_shift_db=args.identity_rssi_shift_db,
+            baselines=identity_baselines,
+            auto_baseline=False,
+        )
+        if identity_store is not None
+        else None
+    )
     packets = rdpcap(str(args.pcap))
     feature_vectors = 0
     management_frames = 0
@@ -49,9 +74,27 @@ def main(argv: list[str] | None = None) -> int:
 
     ap_summaries = ap_state.summaries()
     environment_alerts = environment_detector.analyze(ap_summaries)
+    identity_alerts = []
+    identity_metadata = None
+    if identity_verifier is not None:
+        if args.identity_learn:
+            for summary in ap_summaries:
+                if summary.frames >= args.identity_min_baseline_frames:
+                    identity_verifier.force_baseline(summary)
+        else:
+            identity_alerts = [
+                alert
+                for alert in (identity_verifier.update(summary) for summary in ap_summaries)
+                if alert.triggered
+            ]
+        if identity_store is not None and args.identity_learn:
+            identity_metadata = identity_store.save(identity_verifier.baselines()).to_dict()
+        elif identity_store is not None:
+            identity_metadata = identity_store.metadata.to_dict()
     ssid_by_bssid = {summary.bssid: summary.ssid for summary in ap_summaries}
     correlated_alerts = correlation_engine.correlate(
         events_from_alerts(
+            identity_alerts=identity_alerts,
             deauth_alerts=deauth_alerts[-50:],
             environment_alerts=environment_alerts,
             ssid_by_bssid=ssid_by_bssid,
@@ -65,6 +108,8 @@ def main(argv: list[str] | None = None) -> int:
         "access_points": [summary.to_dict() for summary in ap_summaries],
         "management": [summary.to_dict() for summary in management_counter.summaries(now=0.0)],
         "deauth_alerts": [alert.to_dict() for alert in deauth_alerts[-50:]],
+        "identity_alerts": [alert.to_dict() for alert in identity_alerts],
+        "identity_baseline": identity_metadata,
         "environment_alerts": [alert.to_dict() for alert in environment_alerts],
         "correlated_alerts": [alert.to_dict() for alert in correlated_alerts],
     }

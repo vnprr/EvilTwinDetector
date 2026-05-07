@@ -5,12 +5,17 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from dataclasses import asdict
+from pathlib import Path
 
 from wiguard.capture import CaptureConfig, WiGuardCaptureEngine
 from wiguard.capture.models import DEFAULT_ALFA_INTERFACE, DEFAULT_INTERNAL_INTERFACE, default_channels
 from wiguard.correlation import CorrelationEngine, events_from_alerts
-from wiguard.detection import DeauthStormDetector, EnvironmentAnomalyDetector
+from wiguard.detection import (
+    APIdentityVerifier,
+    DeauthStormDetector,
+    EnvironmentAnomalyDetector,
+    IdentityBaselineStore,
+)
 from wiguard.features import APFeatureStateManager, FeatureExtractor, ManagementFrameCounter
 from wiguard.state import APStateManager
 
@@ -29,7 +34,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--quiet", action="store_true", help="suppress live channel/status output")
     parser.add_argument("--features", action="store_true", help="include feature extraction summaries in JSON output")
     parser.add_argument("--min-clock-samples", type=int, default=50, help="minimum TSF samples for live clock-skew estimate")
+    parser.add_argument("--identity-baseline", type=Path, default=None, help="trusted AP identity baseline JSON path")
+    parser.add_argument("--identity-learn", action="store_true", help="learn or refresh trusted identity baselines from this scan")
+    parser.add_argument("--identity-min-baseline-frames", type=int, default=50, help="minimum frames required to learn an identity baseline")
+    parser.add_argument("--identity-clock-skew-delta-ppm", type=float, default=5.0, help="clock-skew delta threshold for identity alerts")
+    parser.add_argument("--identity-rssi-shift-db", type=float, default=12.0, help="RSSI shift threshold for identity alerts")
     args = parser.parse_args(argv)
+    if args.identity_learn and args.identity_baseline is None:
+        parser.error("--identity-learn requires --identity-baseline")
 
     channels = _parse_channels(args.channels) if args.channels else default_channels()
     config = CaptureConfig(
@@ -48,6 +60,23 @@ def main(argv: list[str] | None = None) -> int:
     deauth_detector = DeauthStormDetector() if args.features else None
     environment_detector = EnvironmentAnomalyDetector() if args.features else None
     correlation_engine = CorrelationEngine() if args.features else None
+    identity_store = (
+        IdentityBaselineStore(args.identity_baseline)
+        if args.features and args.identity_baseline is not None
+        else None
+    )
+    identity_baselines = identity_store.load() if identity_store is not None else ()
+    identity_verifier = (
+        APIdentityVerifier(
+            min_baseline_frames=args.identity_min_baseline_frames,
+            clock_skew_delta_ppm=args.identity_clock_skew_delta_ppm,
+            rssi_shift_db=args.identity_rssi_shift_db,
+            baselines=identity_baselines,
+            auto_baseline=False,
+        )
+        if args.features and identity_store is not None
+        else None
+    )
     deauth_alerts = []
 
     def on_channel(channel: int, ok: bool, error: str | None) -> None:
@@ -102,10 +131,28 @@ def main(argv: list[str] | None = None) -> int:
                 if environment_detector is not None
                 else []
             )
+            identity_alerts = []
+            identity_metadata = None
+            if identity_verifier is not None:
+                if args.identity_learn:
+                    for summary in feature_summaries:
+                        if summary.frames >= args.identity_min_baseline_frames:
+                            identity_verifier.force_baseline(summary)
+                else:
+                    identity_alerts = [
+                        alert
+                        for alert in (identity_verifier.update(summary) for summary in feature_summaries)
+                        if alert.triggered
+                    ]
+                if identity_store is not None and args.identity_learn:
+                    identity_metadata = identity_store.save(identity_verifier.baselines()).to_dict()
+                elif identity_store is not None:
+                    identity_metadata = identity_store.metadata.to_dict()
             ssid_by_bssid = {summary.bssid: summary.ssid for summary in feature_summaries}
             correlated_alerts = (
                 correlation_engine.correlate(
                     events_from_alerts(
+                        identity_alerts=identity_alerts,
                         deauth_alerts=deauth_alerts[-50:],
                         environment_alerts=environment_alerts,
                         ssid_by_bssid=ssid_by_bssid,
@@ -121,6 +168,8 @@ def main(argv: list[str] | None = None) -> int:
                 summary.to_dict() for summary in management_counter.summaries()
             ]
             payload["deauth_alerts"] = [alert.to_dict() for alert in deauth_alerts[-50:]]
+            payload["identity_alerts"] = [alert.to_dict() for alert in identity_alerts]
+            payload["identity_baseline"] = identity_metadata
             payload["environment_alerts"] = [alert.to_dict() for alert in environment_alerts]
             payload["correlated_alerts"] = [alert.to_dict() for alert in correlated_alerts]
         print(json.dumps(payload, indent=2))

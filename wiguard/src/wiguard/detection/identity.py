@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+from typing import Iterable
 
 from wiguard.features import APFeatureSummary
 
@@ -31,6 +32,7 @@ class IdentityAlert:
 
     def to_dict(self) -> dict[str, object]:
         return {
+            "module": "identity_verification",
             "bssid": self.bssid,
             "ssid": self.ssid,
             "score": self.score,
@@ -52,7 +54,7 @@ class IdentityBaseline:
     @classmethod
     def from_summary(cls, summary: APFeatureSummary) -> "IdentityBaseline":
         return cls(
-            bssid=summary.bssid,
+            bssid=summary.bssid.lower(),
             ssid=summary.ssid,
             frames=summary.frames,
             dominant_ie_fingerprint=summary.dominant_ie_fingerprint,
@@ -64,6 +66,22 @@ class IdentityBaseline:
             sequence_reset_count=summary.sequence_analysis.reset_count,
         )
 
+    @classmethod
+    def from_dict(cls, payload: dict[str, object]) -> "IdentityBaseline":
+        return cls(
+            bssid=str(payload["bssid"]).lower(),
+            ssid=str(payload["ssid"]),
+            frames=int(payload.get("frames", 0)),
+            dominant_ie_fingerprint=_optional_str(payload.get("dominant_ie_fingerprint")),
+            avg_rssi_dbm=_optional_float(payload.get("avg_rssi_dbm")),
+            rssi_stddev=_optional_float(payload.get("rssi_stddev")),
+            clock_skew_ppm=_optional_float(payload.get("clock_skew_ppm")),
+            sequence_reset_count=int(payload.get("sequence_reset_count", 0)),
+        )
+
+    def to_dict(self) -> dict[str, object]:
+        return asdict(self)
+
 
 class APIdentityVerifier:
     """Compare AP feature summaries against a per-BSSID baseline."""
@@ -74,17 +92,23 @@ class APIdentityVerifier:
         min_baseline_frames: int = 50,
         clock_skew_delta_ppm: float = 5.0,
         rssi_shift_db: float = 12.0,
+        baselines: Iterable[IdentityBaseline] | None = None,
+        auto_baseline: bool = True,
     ) -> None:
         self.min_baseline_frames = min_baseline_frames
         self.clock_skew_delta_ppm = clock_skew_delta_ppm
         self.rssi_shift_db = rssi_shift_db
+        self.auto_baseline = auto_baseline
         self._baselines: dict[str, IdentityBaseline] = {}
+        for baseline in baselines or ():
+            self._baselines[baseline.bssid.lower()] = baseline
 
     def update(self, summary: APFeatureSummary) -> IdentityAlert:
-        baseline = self._baselines.get(summary.bssid)
+        bssid = summary.bssid.lower()
+        baseline = self._baselines.get(bssid)
         if baseline is None:
-            if summary.frames >= self.min_baseline_frames:
-                self._baselines[summary.bssid] = IdentityBaseline.from_summary(summary)
+            if self.auto_baseline and summary.frames >= self.min_baseline_frames:
+                self._baselines[bssid] = IdentityBaseline.from_summary(summary)
             return IdentityAlert(bssid=summary.bssid, ssid=summary.ssid, score=0.0, signals=())
 
         signals = tuple(self._signals(baseline, summary))
@@ -98,11 +122,14 @@ class APIdentityVerifier:
 
     def force_baseline(self, summary: APFeatureSummary) -> IdentityBaseline:
         baseline = IdentityBaseline.from_summary(summary)
-        self._baselines[summary.bssid] = baseline
+        self._baselines[summary.bssid.lower()] = baseline
         return baseline
 
     def baseline_for(self, bssid: str) -> IdentityBaseline | None:
         return self._baselines.get(bssid.lower())
+
+    def baselines(self) -> tuple[IdentityBaseline, ...]:
+        return tuple(sorted(self._baselines.values(), key=lambda baseline: baseline.bssid))
 
     def _signals(
         self,
@@ -185,3 +212,15 @@ def _signal_weight(signal: IdentitySignal) -> float:
     if signal.severity == "medium":
         return 0.25
     return 0.1
+
+
+def _optional_float(value: object) -> float | None:
+    if value is None:
+        return None
+    return float(value)
+
+
+def _optional_str(value: object) -> str | None:
+    if value is None:
+        return None
+    return str(value)

@@ -22,6 +22,8 @@ features:
 
 detection:
   identity:
+    baseline_path: .wiguard/identity-baselines.json
+    auto_learn: false
     min_baseline_frames: 50
     clock_skew_delta_ppm: 5.0
     rssi_shift_db: 12.0

@@ -157,3 +157,45 @@ Notes:
 
 - Correlation is now ready for Module 1 identity alerts once persistent baseline lifecycle is added.
 - The engine currently correlates a single analysis window. A later production daemon should add time-window persistence, deduplication over time, and alert escalation history.
+
+## 2026-05-07 — Etap 2 Module 1 Lifecycle, Persistent Identity Baselines
+
+- Added persistent trusted baseline storage for `APIdentityVerifier`:
+  - `IdentityBaselineStore`,
+  - schema-versioned JSON format,
+  - atomic write through a temporary file and replace,
+  - load/save metadata included in JSON output.
+- Added explicit identity workflow to both live and offline paths:
+  - `--identity-baseline PATH` loads trusted baselines,
+  - `--identity-learn` learns or refreshes baselines from a known-good scan/pcap,
+  - monitor mode does not auto-learn unknown BSSIDs.
+- Added identity thresholds to CLI/analyzer:
+  - `--identity-min-baseline-frames`,
+  - `--identity-clock-skew-delta-ppm`,
+  - `--identity-rssi-shift-db`.
+- Wired `identity_alerts` into:
+  - live `wiguard-scan --features --json`,
+  - offline `wiguard-analyze-pcap`,
+  - `CorrelationEngine` through normalized `DetectionEvent`.
+- Added local baseline path defaults to `config.yaml` and ignored `.wiguard/` in Git.
+- Added test coverage for:
+  - identity baseline JSON round-trip,
+  - monitor mode not auto-learning unknown BSSIDs,
+  - loaded baseline triggering an identity alert.
+- Validated offline baseline lifecycle with `/tmp/wiguard_alfa_beacons.pcap` and a temporary baseline file:
+  - learn pass: 5 AP profiles, 5 baselines saved, 0 identity alerts,
+  - monitor pass against the learned baseline: 5 baselines loaded, 0 identity alerts, 0 correlated alerts.
+- Validated live baseline learning with `sudo .venv/bin/wiguard-scan --duration 4 --dwell 2 --channels 1 --features --min-clock-samples 5 --identity-baseline /tmp/wiguard_identity_live_baseline.json --identity-learn --identity-min-baseline-frames 1 --json`:
+  - 139 packets,
+  - 120 AP observations,
+  - 5 feature AP profiles,
+  - 5 identity baselines saved,
+  - 0 identity alerts,
+  - 0 deauth/environment/correlated alerts.
+- Confirmed after the live run that `wlo1` stayed connected to `UPC257567143` and Alfa `wlx00c0cab6d8f3` returned to `managed` / disconnected.
+- Test status after this stage: `26` tests passing.
+
+Notes:
+
+- This is the first point where Module 1 can operate across scan windows instead of only inside unit tests.
+- Baseline learning is intentionally explicit because silent auto-learning is dangerous in an Evil Twin detector: an attack-period capture could otherwise become trusted state.

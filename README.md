@@ -31,6 +31,18 @@ For feature-level summaries during live capture:
 sudo .venv/bin/wiguard-scan --duration 20 --features --json
 ```
 
+To learn a trusted identity baseline from a known-good passive scan:
+
+```bash
+sudo .venv/bin/wiguard-scan --duration 60 --features --identity-baseline .wiguard/identity-baselines.json --identity-learn --json
+```
+
+To monitor later scans against that trusted baseline:
+
+```bash
+sudo .venv/bin/wiguard-scan --duration 20 --features --identity-baseline .wiguard/identity-baselines.json --json
+```
+
 The JSON output contains capture metrics plus the aggregated AP state:
 
 ```json
@@ -83,7 +95,7 @@ The first detection module is `APIdentityVerifier`. It compares a stable per-BSS
 - strong RSSI profile shifts
 - sequence-number resets/backward jumps
 
-This is intentionally deterministic and conservative. It is a signal source for the future correlation engine, not a standalone final verdict.
+Trusted baselines are explicit. Use `--identity-learn` only during a known-good capture; monitor mode does not auto-learn unknown BSSIDs. This avoids silently trusting a suspicious AP seen during an attack window.
 
 The second detection module is `DeauthStormDetector`. It consumes management-frame counters and emits explainable signals for:
 
