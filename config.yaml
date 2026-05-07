@@ -14,6 +14,18 @@ capture:
 state:
   rolling_window_size: 300
 
+features:
+  clock_skew_min_samples: 50
+  clock_skew_window_size: 300
+  management_recent_window_seconds: 10
+  dynamic_ie_ids_excluded_from_fingerprint: [5, 11, 37, 40]
+
+detection:
+  identity:
+    min_baseline_frames: 50
+    clock_skew_delta_ppm: 5.0
+    rssi_shift_db: 12.0
+
 safety:
   require_internal_wifi_connected: true
   forbidden_commands:

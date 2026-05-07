@@ -5,6 +5,7 @@ from __future__ import annotations
 import time
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
+from typing import Any
 
 from scapy.all import sniff
 
@@ -17,6 +18,7 @@ from .models import AccessPointObservation, CaptureConfig
 
 ObservationCallback = Callable[[AccessPointObservation, APStateManager], None]
 ChannelCallback = Callable[[int, bool, str | None], None]
+PacketCallback = Callable[[Any], None]
 
 
 @dataclass
@@ -52,6 +54,7 @@ class WiGuardCaptureEngine:
         max_observations: int | None = None,
         on_observation: ObservationCallback | None = None,
         on_channel: ChannelCallback | None = None,
+        on_packet: PacketCallback | None = None,
     ) -> APStateManager:
         self.adapter.preflight(
             require_internal_connected=self.config.require_internal_wifi_connected
@@ -88,6 +91,8 @@ class WiGuardCaptureEngine:
                     def handle_packet(packet) -> None:
                         nonlocal observations, stop_requested
                         self.stats.packets_seen += 1
+                        if on_packet is not None:
+                            on_packet(packet)
                         observation = parse_ap_observation(
                             packet,
                             observed_monotonic=monotonic_raw(),

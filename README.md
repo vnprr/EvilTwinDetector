@@ -25,6 +25,12 @@ For machine-readable output:
 sudo .venv/bin/wiguard-scan --duration 20 --json
 ```
 
+For feature-level summaries during live capture:
+
+```bash
+sudo .venv/bin/wiguard-scan --duration 20 --features --json
+```
+
 The JSON output contains capture metrics plus the aggregated AP state:
 
 ```json
@@ -50,6 +56,33 @@ The JSON output contains capture metrics plus the aggregated AP state:
 ```
 
 The scan is passive. It does not associate, deauthenticate, inject frames, or touch the internal Wi-Fi adapter.
+
+## Analyze A PCAP
+
+Use the offline analyzer for repeatable feature extraction on saved captures:
+
+```bash
+.venv/bin/wiguard-analyze-pcap /tmp/wiguard_alfa_beacons.pcap --min-clock-samples 3
+```
+
+It extracts:
+
+- IE sequence signatures and stable SHA-256 IE fingerprint hashes
+- Vendor OUIs from vendor-specific IE `221`
+- RSSI statistics, beacon timing jitter, and sequence-number continuity
+- Clock-skew regression when enough TSF samples exist
+- Deauthentication and disassociation counters
+
+## Detection Foundation
+
+The first detection module is `APIdentityVerifier`. It compares a stable per-BSSID baseline against later AP feature summaries and emits explainable signals for:
+
+- IE fingerprint changes
+- clock-skew changes beyond a ppm threshold
+- strong RSSI profile shifts
+- sequence-number resets/backward jumps
+
+This is intentionally deterministic and conservative. It is a signal source for the future correlation engine, not a standalone final verdict.
 
 ## Development
 
