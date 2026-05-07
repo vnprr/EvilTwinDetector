@@ -283,3 +283,55 @@ Notes:
 - Synthetic fixtures validate detector logic and regression behavior, not RF realism.
 - Raw real-world pcaps should not be committed without sanitization and written provenance.
 - This harness is now the foundation for Etap 5 experiments: detection rate, false-positive analysis, and ablation.
+
+## 2026-05-07 — Etap 2C, Long-Running Sensor Core & Persistent Alert Timeline
+
+- Added a SQLite-backed runtime store at `.wiguard/wiguard.db` for production-style local state.
+- Added persistent tables for:
+  - AP snapshots,
+  - raw detection events,
+  - correlated alert lifecycle rows,
+  - timeline events.
+- Added idempotent schema initialization with an explicit runtime schema version.
+- Added `wiguard-sensor` as the first long-running passive sensor command.
+- The sensor uses the existing safe capture path and existing detection modules:
+  - Alfa interface for monitor capture,
+  - internal `wlo1` remains protected,
+  - no association, injection, deauth, or active verification.
+- Added runtime alert lifecycle metadata:
+  - `first_seen`,
+  - `last_seen`,
+  - `count`,
+  - `status`,
+  - cooldown-aware deduplication for repeated correlated alerts.
+- Added a runtime evidence window so management-frame bursts expire from live correlation instead of persisting forever.
+- Added JSON-lines flush output through `--json-events` for future API/dashboard integration.
+- Added runtime defaults to `config.yaml`:
+  - `runtime.state_path`,
+  - `runtime.flush_interval_seconds`,
+  - `runtime.alert_cooldown_seconds`,
+  - `runtime.window_seconds`.
+- Added tests for:
+  - idempotent SQLite schema initialization,
+  - AP snapshot upsert semantics,
+  - raw detection event persistence,
+  - correlated alert lifecycle deduplication,
+  - replaying suspicious synthetic fixtures into runtime state,
+  - clean fixture replay without correlated false positives.
+- Validated unit/integration suite: `41` tests passing.
+- Validated fixture benchmark with `wiguard-evaluate-fixtures tests/pcap_fixtures/synthetic/manifest.json`: 5 scenarios, 5 passed, 0 failed.
+- Validated `wiguard-sensor --help` after refreshing the editable venv install.
+- Validated live sensor smoke with `sudo .venv/bin/wiguard-sensor --duration 4 --dwell 1 --channels 1 --state-path /tmp/wiguard_sensor_smoke.db --flush-interval 1 --runtime-window 30 --min-clock-samples 5 --quiet`:
+  - 56 packets,
+  - 56 AP observations,
+  - 5 AP snapshots persisted,
+  - 0 raw detection events,
+  - 0 correlated alerts,
+  - 0 timeline events.
+- Confirmed after the live run that `wlo1` stayed connected to `UPC257567143` and Alfa `wlx00c0cab6d8f3` returned to `managed` / disconnected.
+
+Notes:
+
+- This stage turns WiGuard from a scan/analyze prototype into a service-ready sensor core.
+- The dashboard/API should read from this runtime state instead of invoking detectors directly.
+- Active Verification remains intentionally postponed until the hardware/safety model is expanded.

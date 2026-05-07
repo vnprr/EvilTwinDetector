@@ -69,6 +69,30 @@ The JSON output contains capture metrics plus the aggregated AP state:
 
 The scan is passive. It does not associate, deauthenticate, inject frames, or touch the internal Wi-Fi adapter.
 
+## Run The Sensor Runtime
+
+`wiguard-sensor` is the first long-running runtime mode. It uses the same passive capture and detection pipeline as `wiguard-scan`, then persists AP snapshots, raw detection events, correlated alerts, and timeline events to SQLite.
+
+```bash
+sudo .venv/bin/wiguard-sensor --duration 300 --state-path .wiguard/wiguard.db
+```
+
+For machine-readable operational output, emit one JSON line per flush:
+
+```bash
+sudo .venv/bin/wiguard-sensor --duration 300 --json-events --quiet
+```
+
+Important runtime defaults:
+
+- state database: `.wiguard/wiguard.db`
+- flush interval: `5` seconds
+- correlated alert cooldown: `300` seconds
+- runtime correlation window: `300` seconds
+- runtime state remains local and ignored by Git
+
+The sensor is still passive. It uses the Alfa adapter for monitor-mode capture, restores it on exit, and keeps `wlo1` as the protected internet interface.
+
 ## Analyze A PCAP
 
 Use the offline analyzer for repeatable feature extraction on saved captures:
