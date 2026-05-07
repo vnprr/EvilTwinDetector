@@ -115,6 +115,18 @@ class CorrelationEngineTest(unittest.TestCase):
 
         self.assertEqual(alerts, [])
 
+    def test_deduplicates_repeated_alerts_from_the_same_module(self) -> None:
+        engine = CorrelationEngine(min_final_score=0.0)
+        events = events_from_alerts(deauth_alerts=[deauth_alert() for _ in range(20)])
+
+        alerts = engine.correlate(events)
+
+        self.assertEqual(len(alerts), 1)
+        self.assertEqual(alerts[0].contributing_modules, ("deauth_storm",))
+        self.assertEqual(alerts[0].classification, "info")
+        self.assertLess(alerts[0].final_score, 0.8)
+        self.assertEqual(len(alerts[0].timeline), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

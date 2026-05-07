@@ -126,7 +126,8 @@ class CorrelationEngine:
             grouped[event.bssid.lower()].append(event)
 
         alerts = []
-        for bssid, group in grouped.items():
+        for bssid, raw_group in grouped.items():
+            group = _dedupe_events_by_module(raw_group)
             modules = tuple(sorted({event.module for event in group}))
             final_score = self._final_score(group, modules)
             if final_score < self.min_final_score:
@@ -180,6 +181,32 @@ def _classification(score: float) -> str:
     if score >= 0.45:
         return "suspicious"
     return "info"
+
+
+def _dedupe_events_by_module(events: list[DetectionEvent]) -> list[DetectionEvent]:
+    deduped = []
+    for module in sorted({event.module for event in events}):
+        module_events = [event for event in events if event.module == module]
+        best = max(module_events, key=lambda event: event.score)
+        signal_names = tuple(sorted({name for event in module_events for name in event.signal_names}))
+        if len(module_events) == 1:
+            evidence = best.evidence
+        else:
+            evidence = {
+                "deduplicated_events": len(module_events),
+                "events": [event.evidence for event in module_events],
+            }
+        deduped.append(
+            DetectionEvent(
+                module=module,
+                bssid=best.bssid,
+                ssid=best.ssid,
+                score=best.score,
+                signal_names=signal_names,
+                evidence=evidence,
+            )
+        )
+    return deduped
 
 
 def _first_ssid(events: list[DetectionEvent]) -> str:

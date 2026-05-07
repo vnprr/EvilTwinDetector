@@ -246,3 +246,40 @@ Notes:
 
 - The implementation intentionally avoids SciPy/HDBSCAN/Hartigan dip test for now. The v1 detector is dependency-light and explainable, which is better for the first reliable product slice.
 - The detector is conservative: residual clustering alone is not enough; it must be confirmed by another physical or frame-level signal.
+
+## 2026-05-07 — Etap 2B, Detection Evaluation Harness & Curated Fixtures
+
+- Added a reusable offline `analyze_pcap` pipeline so CLI analysis, tests, and evaluation use the same detector path.
+- Added `wiguard-generate-fixtures` for safe synthetic Scapy PCAP generation.
+- Added `wiguard-evaluate-fixtures` for repeatable detector evaluation from a JSON manifest.
+- Added schema-versioned fixture manifests with:
+  - scenario name,
+  - relative pcap path,
+  - expected classification,
+  - expected modules,
+  - expected signals,
+  - source and limitations notes.
+- Added curated synthetic fixtures for:
+  - clean single AP,
+  - duplicate BSSID with two clock profiles,
+  - same-SSID environment outlier,
+  - broadcast deauth burst,
+  - correlated duplicate BSSID plus deauth storm.
+- Added evaluation output with per-scenario pass/fail status, observed classification, observed modules, observed signals, missing modules, missing signals, and alert counts.
+- The harness exposed a real correlation bug: repeated alerts from the same module could stack into an artificially high final score.
+- Fixed correlation scoring by deduplicating events per BSSID/module before final score calculation.
+- Added tests for:
+  - manifest parsing and required-field validation,
+  - generated synthetic PCAP existence,
+  - full synthetic fixture evaluation,
+  - correlation deduplication for repeated same-module alerts.
+- Generated committed synthetic fixtures under `tests/pcap_fixtures/synthetic/`.
+- Validated fixture benchmark with `wiguard-evaluate-fixtures tests/pcap_fixtures/synthetic/manifest.json`: 5 scenarios, 5 passed, 0 failed.
+- Validated local real clean smoke manifest against `/tmp/wiguard_alfa_beacons.pcap`: 1 scenario, 1 passed, observed `clean`, 0 raw alerts, 0 correlated alerts.
+- Test status after this stage: `35` tests passing.
+
+Notes:
+
+- Synthetic fixtures validate detector logic and regression behavior, not RF realism.
+- Raw real-world pcaps should not be committed without sanitization and written provenance.
+- This harness is now the foundation for Etap 5 experiments: detection rate, false-positive analysis, and ablation.

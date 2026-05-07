@@ -86,6 +86,17 @@ It extracts:
 - Deauthentication and disassociation counters
 - Same-SSID environment anomaly signals from peer comparison
 
+## Evaluate Fixtures
+
+Generate safe synthetic fixtures and run the repeatable detector benchmark:
+
+```bash
+wiguard-generate-fixtures tests/pcap_fixtures/synthetic
+wiguard-evaluate-fixtures tests/pcap_fixtures/synthetic/manifest.json
+```
+
+The evaluation report checks expected classifications, modules, and signal names for clean and Evil-Twin-like scenarios. Synthetic fixtures are safe Scapy-generated management frames; raw real-world pcaps should stay outside Git unless they are explicitly sanitized.
+
 ## Detection Foundation
 
 The first detection module is `APIdentityVerifier`. It compares a stable per-BSSID baseline against later AP feature summaries and emits explainable signals for:

@@ -6,6 +6,8 @@ __pycache__/
 .ruff_cache/
 *.pcap
 *.pcapng
+!tests/pcap_fixtures/**/*.pcap
+!tests/pcap_fixtures/**/*.pcapng
 *.egg-info/
 data/raw/
 data/processed/

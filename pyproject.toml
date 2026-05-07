@@ -14,6 +14,8 @@ dependencies = [
 
 [project.scripts]
 wiguard-analyze-pcap = "wiguard.pcap_analyzer:main"
+wiguard-evaluate-fixtures = "wiguard.evaluation.runner:main"
+wiguard-generate-fixtures = "wiguard.evaluation.synthetic:main"
 wiguard-scan = "wiguard.cli:main"
 
 [tool.setuptools.packages.find]
