@@ -20,6 +20,12 @@ runtime:
   alert_cooldown_seconds: 300.0
   window_seconds: 300.0
 
+api:
+  host: 127.0.0.1
+  port: 8765
+  state_path: .wiguard/wiguard.db
+  cors_origins: ["http://localhost:5173"]
+
 features:
   clock_skew_min_samples: 50
   clock_skew_window_size: 300

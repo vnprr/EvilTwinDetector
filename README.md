@@ -93,6 +93,27 @@ Important runtime defaults:
 
 The sensor is still passive. It uses the Alfa adapter for monitor-mode capture, restores it on exit, and keeps `wlo1` as the protected internet interface.
 
+## Run The Runtime API
+
+`wiguard-api` exposes a local read-only FastAPI backend over the SQLite runtime state produced by `wiguard-sensor`.
+
+```bash
+.venv/bin/wiguard-api --state-path .wiguard/wiguard.db --host 127.0.0.1 --port 8765
+```
+
+Useful endpoints:
+
+- `GET /api/health`
+- `GET /api/aps`
+- `GET /api/aps/{bssid}`
+- `GET /api/aps/{bssid}/timeline`
+- `GET /api/alerts`
+- `GET /api/events`
+- `GET /api/stats`
+- `WS /ws/live`
+
+The API does not start active verification, change thresholds, or touch Wi-Fi interfaces. It only reads persisted runtime state and initializes an empty schema if the database does not exist yet.
+
 ## Analyze A PCAP
 
 Use the offline analyzer for repeatable feature extraction on saved captures:

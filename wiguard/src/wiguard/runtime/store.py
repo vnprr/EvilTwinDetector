@@ -143,7 +143,7 @@ class RuntimeStore:
                 """
                 INSERT INTO metadata (key, value)
                 VALUES ('schema_version', ?)
-                ON CONFLICT(key) DO UPDATE SET value = excluded.value
+                ON CONFLICT(key) DO NOTHING
                 """,
                 (str(SCHEMA_VERSION),),
             )
@@ -420,23 +420,135 @@ class RuntimeStore:
         ).fetchall()
         return [_row_to_payload(row) for row in rows]
 
-    def detection_events(self) -> list[dict[str, object]]:
-        rows = self._connection.execute(
-            "SELECT * FROM detection_events ORDER BY event_id"
-        ).fetchall()
+    def detection_events(
+        self,
+        *,
+        bssid: str | None = None,
+        module: str | None = None,
+        limit: int | None = None,
+        offset: int = 0,
+        descending: bool = False,
+    ) -> list[dict[str, object]]:
+        filters = []
+        params: list[object] = []
+        if bssid is not None:
+            filters.append("bssid = ?")
+            params.append(bssid.lower())
+        if module is not None:
+            filters.append("module = ?")
+            params.append(module)
+        query = "SELECT * FROM detection_events"
+        if filters:
+            query += " WHERE " + " AND ".join(filters)
+        query += " ORDER BY event_id DESC" if descending else " ORDER BY event_id"
+        if limit is not None:
+            query += " LIMIT ? OFFSET ?"
+            params.extend([max(0, limit), max(0, offset)])
+        rows = self._connection.execute(query, params).fetchall()
         return [_row_to_payload(row) for row in rows]
 
-    def correlated_alerts(self) -> list[dict[str, object]]:
-        rows = self._connection.execute(
-            "SELECT * FROM correlated_alerts ORDER BY last_seen DESC, bssid"
-        ).fetchall()
+    def correlated_alerts(
+        self,
+        *,
+        classification: str | None = None,
+        status: str | None = None,
+        ssid: str | None = None,
+        bssid: str | None = None,
+    ) -> list[dict[str, object]]:
+        filters = []
+        params: list[object] = []
+        if classification is not None:
+            filters.append("classification = ?")
+            params.append(classification)
+        if status is not None:
+            filters.append("status = ?")
+            params.append(status)
+        if ssid is not None:
+            filters.append("ssid = ?")
+            params.append(ssid)
+        if bssid is not None:
+            filters.append("bssid = ?")
+            params.append(bssid.lower())
+        query = "SELECT * FROM correlated_alerts"
+        if filters:
+            query += " WHERE " + " AND ".join(filters)
+        query += " ORDER BY last_seen DESC, bssid"
+        rows = self._connection.execute(query, params).fetchall()
         return [_row_to_payload(row) for row in rows]
 
-    def timeline_events(self) -> list[dict[str, object]]:
-        rows = self._connection.execute(
-            "SELECT * FROM timeline_events ORDER BY timeline_id"
-        ).fetchall()
+    def correlated_alert(self, alert_key: str) -> dict[str, object] | None:
+        row = self._connection.execute(
+            "SELECT * FROM correlated_alerts WHERE alert_key = ?",
+            (alert_key,),
+        ).fetchone()
+        return _row_to_payload(row) if row is not None else None
+
+    def ap_snapshot(self, bssid: str) -> dict[str, object] | None:
+        row = self._connection.execute(
+            "SELECT * FROM ap_snapshots WHERE bssid = ?",
+            (bssid.lower(),),
+        ).fetchone()
+        return _row_to_payload(row) if row is not None else None
+
+    def timeline_events(
+        self,
+        *,
+        bssid: str | None = None,
+        after_id: int | None = None,
+        limit: int | None = None,
+    ) -> list[dict[str, object]]:
+        filters = []
+        params: list[object] = []
+        if bssid is not None:
+            filters.append("bssid = ?")
+            params.append(bssid.lower())
+        if after_id is not None:
+            filters.append("timeline_id > ?")
+            params.append(max(0, after_id))
+        query = "SELECT * FROM timeline_events"
+        if filters:
+            query += " WHERE " + " AND ".join(filters)
+        query += " ORDER BY timeline_id"
+        if limit is not None:
+            query += " LIMIT ?"
+            params.append(max(0, limit))
+        rows = self._connection.execute(query, params).fetchall()
         return [_row_to_payload(row) for row in rows]
+
+    def stats(self) -> dict[str, object]:
+        classification_rows = self._connection.execute(
+            """
+            SELECT classification, count(*) AS count
+            FROM correlated_alerts
+            GROUP BY classification
+            ORDER BY classification
+            """
+        ).fetchall()
+        latest_row = self._connection.execute(
+            """
+            SELECT
+                (SELECT max(updated_at) FROM ap_snapshots) AS latest_ap_update,
+                (SELECT max(observed_at) FROM detection_events) AS latest_detection_event,
+                (SELECT max(last_seen) FROM correlated_alerts) AS latest_correlated_alert,
+                (SELECT max(observed_at) FROM timeline_events) AS latest_timeline_event
+            """
+        ).fetchone()
+        return {
+            "schema_version": self.schema_version(),
+            "ap_count": self._count("ap_snapshots"),
+            "raw_event_count": self._count("detection_events"),
+            "alert_count": self._count("correlated_alerts"),
+            "timeline_event_count": self._count("timeline_events"),
+            "classification_counts": {
+                str(row["classification"]): int(row["count"])
+                for row in classification_rows
+            },
+            "latest": dict(latest_row) if latest_row is not None else {},
+        }
+
+    def _count(self, table: str) -> int:
+        row = self._connection.execute(f"SELECT count(*) AS count FROM {table}").fetchone()
+        return int(row["count"]) if row is not None else 0
 
     def _insert_timeline_event(
         self,

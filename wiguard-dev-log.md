@@ -335,3 +335,52 @@ Notes:
 - This stage turns WiGuard from a scan/analyze prototype into a service-ready sensor core.
 - The dashboard/API should read from this runtime state instead of invoking detectors directly.
 - Active Verification remains intentionally postponed until the hardware/safety model is expanded.
+
+## 2026-05-07 — Etap 4A, Runtime Store API
+
+- Added a local read-only FastAPI backend over the persistent WiGuard runtime SQLite state.
+- Added `wiguard-api` as the API launcher command.
+- Added API dependencies:
+  - `fastapi`,
+  - `uvicorn[standard]`,
+  - `httpx` for API test coverage.
+- Added runtime store read methods for:
+  - filtered correlated alerts,
+  - single AP snapshots,
+  - single correlated alert details,
+  - filtered/paginated raw detection events,
+  - BSSID-filtered timeline events,
+  - aggregate runtime stats.
+- Added API endpoints:
+  - `GET /api/health`,
+  - `GET /api/stats`,
+  - `GET /api/aps`,
+  - `GET /api/aps/{bssid}`,
+  - `GET /api/aps/{bssid}/timeline`,
+  - `GET /api/alerts`,
+  - `GET /api/alerts/{alert_key}`,
+  - `GET /api/events`,
+  - `WS /ws/live`.
+- Added AP status derivation from open correlated alerts so dashboard rows can show `clean`, `info`, `suspicious`, or `evil_twin`.
+- Added local CORS defaults for a future Vite/React dashboard at `http://localhost:5173`.
+- Added API defaults to `config.yaml`:
+  - `api.host`,
+  - `api.port`,
+  - `api.state_path`,
+  - `api.cors_origins`.
+- Added tests for:
+  - empty database health/schema initialization,
+  - AP list and AP detail responses,
+  - alert filtering and alert detail,
+  - BSSID-filtered AP timeline,
+  - 404 responses for missing APs and alerts,
+  - clean fixture replay returning no API alerts,
+  - paginated raw detection events.
+- Validated unit/integration suite: `48` tests passing.
+- Validated fixture benchmark with `wiguard-evaluate-fixtures tests/pcap_fixtures/synthetic/manifest.json`: 5 scenarios, 5 passed, 0 failed.
+- Validated `wiguard-api --help`.
+
+Notes:
+
+- API remains intentionally read-first: no active verification, no threshold changes, and no Wi-Fi interface operations.
+- This is the backend contract the dashboard should use next.
