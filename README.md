@@ -94,8 +94,11 @@ The first detection module is `APIdentityVerifier`. It compares a stable per-BSS
 - clock-skew changes beyond a ppm threshold
 - strong RSSI profile shifts
 - sequence-number resets/backward jumps
+- simultaneous duplicate-BSSID residual clusters
 
 Trusted baselines are explicit. Use `--identity-learn` only during a known-good capture; monitor mode does not auto-learn unknown BSSIDs. This avoids silently trusting a suspicious AP seen during an attack window.
+
+`DuplicateBSSIDDetector` is part of identity verification. It uses rolling AP TSF samples to find two residual clusters for one BSSID and requires confirmation from clock profile, sequence interleaving, RSSI split, or IE fingerprint split before alerting.
 
 The second detection module is `DeauthStormDetector`. It consumes management-frame counters and emits explainable signals for:
 
@@ -117,7 +120,7 @@ The third detection module is `EnvironmentAnomalyDetector`. It compares APs that
 - contributing modules
 - a short human-readable explanation
 
-Live feature scans and pcap analysis include `deauth_alerts`, `environment_alerts`, and `correlated_alerts` in JSON output.
+Live feature scans and pcap analysis include `deauth_alerts`, `identity_alerts`, `duplicate_bssid_alerts`, `environment_alerts`, and `correlated_alerts` in JSON output.
 
 ## Development
 

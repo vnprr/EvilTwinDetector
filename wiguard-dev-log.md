@@ -199,3 +199,50 @@ Notes:
 
 - This is the first point where Module 1 can operate across scan windows instead of only inside unit tests.
 - Baseline learning is intentionally explicit because silent auto-learning is dangerous in an Evil Twin detector: an attack-period capture could otherwise become trusted state.
+
+## 2026-05-07 — Etap 2 Module 1A, Simultaneous Duplicate BSSID Detection
+
+- Added `DuplicateBSSIDDetector` as a second `identity_verification` signal source.
+- Implemented the first deterministic duplicate-BSSID heuristic:
+  - keep rolling same-BSSID AP TSF samples,
+  - fit one global TSF vs local-time regression,
+  - split residuals at the largest gap,
+  - require minimum sample counts in both clusters,
+  - require at least one independent confirmation signal before alerting.
+- Added duplicate-BSSID identity signals:
+  - `duplicate_bssid_residual_clusters`,
+  - `duplicate_bssid_clock_profile_split`,
+  - `duplicate_bssid_sequence_interleaving`,
+  - `duplicate_bssid_rssi_split`,
+  - `duplicate_bssid_ie_split`.
+- Wired duplicate-BSSID alerts into:
+  - live `wiguard-scan --features --json`,
+  - offline `wiguard-analyze-pcap`,
+  - `identity_alerts`,
+  - dedicated `duplicate_bssid_alerts`,
+  - `CorrelationEngine` as `identity_verification` evidence.
+- Added CLI/analyzer thresholds:
+  - `--duplicate-min-samples`,
+  - `--duplicate-min-cluster-samples`,
+  - `--duplicate-residual-gap-us`.
+- Added default duplicate-BSSID thresholds under `detection.identity.duplicate_bssid` in `config.yaml`.
+- Added unit coverage for:
+  - a clean single-AP clock trend staying quiet,
+  - two simultaneous same-BSSID transmitters producing residual, clock, sequence, RSSI, and IE split signals,
+  - too few samples staying quiet,
+  - too-small residual clusters staying quiet.
+- Validated offline analyzer on `/tmp/wiguard_alfa_beacons.pcap`: 10 packets, 10 feature vectors, 0 management frames, 0 identity alerts, 0 duplicate-BSSID alerts, 0 deauth/environment/correlated alerts.
+- Validated live feature scan with `sudo .venv/bin/wiguard-scan --duration 4 --dwell 2 --channels 1 --features --min-clock-samples 5 --json`:
+  - 84 packets,
+  - 84 AP observations,
+  - 5 feature AP profiles,
+  - 0 identity alerts,
+  - 0 duplicate-BSSID alerts,
+  - 0 deauth/environment/correlated alerts.
+- Confirmed after the live run that `wlo1` stayed connected to `UPC257567143` and Alfa `wlx00c0cab6d8f3` returned to `managed` / disconnected.
+- Test status after this stage: `30` tests passing.
+
+Notes:
+
+- The implementation intentionally avoids SciPy/HDBSCAN/Hartigan dip test for now. The v1 detector is dependency-light and explainable, which is better for the first reliable product slice.
+- The detector is conservative: residual clustering alone is not enough; it must be confirmed by another physical or frame-level signal.

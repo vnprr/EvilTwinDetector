@@ -13,6 +13,7 @@ from wiguard.correlation import CorrelationEngine, events_from_alerts
 from wiguard.detection import (
     APIdentityVerifier,
     DeauthStormDetector,
+    DuplicateBSSIDDetector,
     EnvironmentAnomalyDetector,
     IdentityBaselineStore,
 )
@@ -39,6 +40,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--identity-min-baseline-frames", type=int, default=50, help="minimum frames required to learn an identity baseline")
     parser.add_argument("--identity-clock-skew-delta-ppm", type=float, default=5.0, help="clock-skew delta threshold for identity alerts")
     parser.add_argument("--identity-rssi-shift-db", type=float, default=12.0, help="RSSI shift threshold for identity alerts")
+    parser.add_argument("--duplicate-min-samples", type=int, default=30, help="minimum same-BSSID TSF samples for duplicate detection")
+    parser.add_argument("--duplicate-min-cluster-samples", type=int, default=8, help="minimum samples in each residual cluster")
+    parser.add_argument("--duplicate-residual-gap-us", type=float, default=10_000.0, help="minimum TSF residual gap for duplicate-BSSID detection")
     args = parser.parse_args(argv)
     if args.identity_learn and args.identity_baseline is None:
         parser.error("--identity-learn requires --identity-baseline")
@@ -60,6 +64,17 @@ def main(argv: list[str] | None = None) -> int:
     deauth_detector = DeauthStormDetector() if args.features else None
     environment_detector = EnvironmentAnomalyDetector() if args.features else None
     correlation_engine = CorrelationEngine() if args.features else None
+    duplicate_detector = (
+        DuplicateBSSIDDetector(
+            min_samples=args.duplicate_min_samples,
+            min_cluster_samples=args.duplicate_min_cluster_samples,
+            residual_gap_threshold_us=args.duplicate_residual_gap_us,
+            clock_skew_delta_ppm=args.identity_clock_skew_delta_ppm,
+            rssi_delta_db=args.identity_rssi_shift_db,
+        )
+        if args.features
+        else None
+    )
     identity_store = (
         IdentityBaselineStore(args.identity_baseline)
         if args.features and args.identity_baseline is not None
@@ -98,11 +113,13 @@ def main(argv: list[str] | None = None) -> int:
             or feature_state is None
             or management_counter is None
             or deauth_detector is None
+            or duplicate_detector is None
         ):
             return
         vector = feature_extractor.extract(packet)
         if vector is not None:
             feature_state.update(vector)
+            duplicate_detector.update(vector)
         stats = management_counter.update(packet)
         if stats is not None:
             alert = deauth_detector.update(stats)
@@ -131,6 +148,11 @@ def main(argv: list[str] | None = None) -> int:
                 if environment_detector is not None
                 else []
             )
+            duplicate_bssid_alerts = (
+                duplicate_detector.alerts()
+                if duplicate_detector is not None
+                else []
+            )
             identity_alerts = []
             identity_metadata = None
             if identity_verifier is not None:
@@ -152,7 +174,7 @@ def main(argv: list[str] | None = None) -> int:
             correlated_alerts = (
                 correlation_engine.correlate(
                     events_from_alerts(
-                        identity_alerts=identity_alerts,
+                        identity_alerts=identity_alerts + duplicate_bssid_alerts,
                         deauth_alerts=deauth_alerts[-50:],
                         environment_alerts=environment_alerts,
                         ssid_by_bssid=ssid_by_bssid,
@@ -168,7 +190,12 @@ def main(argv: list[str] | None = None) -> int:
                 summary.to_dict() for summary in management_counter.summaries()
             ]
             payload["deauth_alerts"] = [alert.to_dict() for alert in deauth_alerts[-50:]]
-            payload["identity_alerts"] = [alert.to_dict() for alert in identity_alerts]
+            payload["identity_alerts"] = [
+                alert.to_dict() for alert in identity_alerts + duplicate_bssid_alerts
+            ]
+            payload["duplicate_bssid_alerts"] = [
+                alert.to_dict() for alert in duplicate_bssid_alerts
+            ]
             payload["identity_baseline"] = identity_metadata
             payload["environment_alerts"] = [alert.to_dict() for alert in environment_alerts]
             payload["correlated_alerts"] = [alert.to_dict() for alert in correlated_alerts]
