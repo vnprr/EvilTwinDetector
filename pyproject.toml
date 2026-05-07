@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wiguard"
+version = "0.1.0"
+description = "Passive Evil Twin access point detector foundation."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "scapy>=2.5.0",
+]
+
+[project.scripts]
+wiguard-scan = "wiguard.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["wiguard/src"]
