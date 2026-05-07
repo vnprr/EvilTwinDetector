@@ -25,6 +25,25 @@ detection:
     min_baseline_frames: 50
     clock_skew_delta_ppm: 5.0
     rssi_shift_db: 12.0
+  deauth_storm:
+    deauth_rate_threshold: 10.0
+    disassoc_rate_threshold: 5.0
+    broadcast_rate_threshold: 5.0
+    unicast_rate_threshold: 5.0
+  environment_anomaly:
+    min_frames: 5
+    min_same_ssid_peers: 3
+    majority_ratio: 0.6
+    vendor_oui_distance_threshold: 0.75
+    ie_shape_distance_threshold: 0.45
+    beacon_interval_delta_tu: 20.0
+  correlation:
+    min_final_score: 0.2
+    module_weights:
+      identity_verification: 0.45
+      deauth_storm: 0.35
+      environment_anomaly: 0.35
+      active_verification: 0.6
 
 safety:
   require_internal_wifi_connected: true

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections import defaultdict, deque
+from collections import Counter, defaultdict, deque
 from dataclasses import asdict, dataclass
 from typing import Any
 
@@ -21,7 +21,12 @@ class ManagementFrameStats:
     bssid: str
     channel: int | None
     total: int
+    broadcast_total: int
+    unicast_total: int
     recent_per_second: float
+    recent_broadcast_per_second: float
+    recent_unicast_per_second: float
+    source_macs: tuple[str, ...]
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -33,7 +38,12 @@ class ManagementFrameCounter:
     def __init__(self, *, recent_window_seconds: float = 10.0) -> None:
         self.recent_window_seconds = recent_window_seconds
         self._totals: defaultdict[tuple[str, str, int | None], int] = defaultdict(int)
+        self._broadcast_totals: defaultdict[tuple[str, str, int | None], int] = defaultdict(int)
+        self._unicast_totals: defaultdict[tuple[str, str, int | None], int] = defaultdict(int)
         self._recent: defaultdict[tuple[str, str, int | None], deque[float]] = defaultdict(deque)
+        self._recent_broadcast: defaultdict[tuple[str, str, int | None], deque[float]] = defaultdict(deque)
+        self._recent_unicast: defaultdict[tuple[str, str, int | None], deque[float]] = defaultdict(deque)
+        self._source_macs: defaultdict[tuple[str, str, int | None], Counter[str]] = defaultdict(Counter)
 
     def update(self, packet: Any, *, observed_monotonic: float | None = None) -> ManagementFrameStats | None:
         if not packet.haslayer(Dot11):
@@ -51,12 +61,25 @@ class ManagementFrameCounter:
 
         timestamp = observed_monotonic if observed_monotonic is not None else monotonic_raw()
         bssid = (dot11.addr3 or dot11.addr2 or dot11.addr1 or "<unknown>").lower()
+        source = (dot11.addr2 or "<unknown>").lower()
+        destination = (dot11.addr1 or "<unknown>").lower()
         channel = _channel(packet)
         key = (frame_type, bssid, channel)
         self._totals[key] += 1
+        self._source_macs[key][source] += 1
         recent = self._recent[key]
         recent.append(timestamp)
         self._trim(recent, timestamp)
+        if _is_broadcast(destination):
+            self._broadcast_totals[key] += 1
+            broadcast_recent = self._recent_broadcast[key]
+            broadcast_recent.append(timestamp)
+            self._trim(broadcast_recent, timestamp)
+        else:
+            self._unicast_totals[key] += 1
+            unicast_recent = self._recent_unicast[key]
+            unicast_recent.append(timestamp)
+            self._trim(unicast_recent, timestamp)
         return self._stats_for(key)
 
     def summaries(self, *, now: float | None = None) -> list[ManagementFrameStats]:
@@ -64,6 +87,8 @@ class ManagementFrameCounter:
         summaries = []
         for key, recent in self._recent.items():
             self._trim(recent, timestamp)
+            self._trim(self._recent_broadcast[key], timestamp)
+            self._trim(self._recent_unicast[key], timestamp)
             summaries.append(self._stats_for(key))
         return sorted(summaries, key=lambda item: (item.frame_type, item.bssid, item.channel or -1))
 
@@ -74,7 +99,12 @@ class ManagementFrameCounter:
             bssid=bssid,
             channel=channel,
             total=self._totals[key],
+            broadcast_total=self._broadcast_totals[key],
+            unicast_total=self._unicast_totals[key],
             recent_per_second=len(self._recent[key]) / self.recent_window_seconds,
+            recent_broadcast_per_second=len(self._recent_broadcast[key]) / self.recent_window_seconds,
+            recent_unicast_per_second=len(self._recent_unicast[key]) / self.recent_window_seconds,
+            source_macs=tuple(sorted(self._source_macs[key])),
         )
 
     def _trim(self, recent: deque[float], now: float) -> None:
@@ -99,3 +129,7 @@ def _channel(packet: Any) -> int | None:
     if 5000 <= frequency <= 5900:
         return (frequency - 5000) // 5
     return None
+
+
+def _is_broadcast(mac: str) -> bool:
+    return mac.lower() == "ff:ff:ff:ff:ff:ff"

@@ -72,6 +72,7 @@ It extracts:
 - RSSI statistics, beacon timing jitter, and sequence-number continuity
 - Clock-skew regression when enough TSF samples exist
 - Deauthentication and disassociation counters
+- Same-SSID environment anomaly signals from peer comparison
 
 ## Detection Foundation
 
@@ -83,6 +84,28 @@ The first detection module is `APIdentityVerifier`. It compares a stable per-BSS
 - sequence-number resets/backward jumps
 
 This is intentionally deterministic and conservative. It is a signal source for the future correlation engine, not a standalone final verdict.
+
+The second detection module is `DeauthStormDetector`. It consumes management-frame counters and emits explainable signals for:
+
+- high deauthentication/disassociation frame rates
+- broadcast deauth floods
+- targeted unicast bursts
+
+The third detection module is `EnvironmentAnomalyDetector`. It compares APs that advertise the same SSID and emits conservative peer-comparison signals for:
+
+- IE fingerprint minority profiles
+- vendor OUI outliers
+- IE element shape outliers
+- beacon interval outliers
+
+`CorrelationEngine` combines raw module alerts per BSSID and emits deduplicated `correlated_alerts` with:
+
+- final score from weighted module evidence
+- classification: `info`, `suspicious`, or `evil_twin`
+- contributing modules
+- a short human-readable explanation
+
+Live feature scans and pcap analysis include `deauth_alerts`, `environment_alerts`, and `correlated_alerts` in JSON output.
 
 ## Development
 

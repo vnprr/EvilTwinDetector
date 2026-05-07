@@ -40,6 +40,9 @@ class ManagementFrameCounterTest(unittest.TestCase):
         self.assertIsNotNone(deauth_stats)
         self.assertEqual(deauth_stats.bssid, "aa:bb:cc:dd:ee:ff")
         self.assertEqual(deauth_stats.channel, 1)
+        self.assertEqual(deauth_stats.broadcast_total, 1)
+        self.assertEqual(deauth_stats.unicast_total, 0)
+        self.assertEqual(deauth_stats.source_macs, ("aa:bb:cc:dd:ee:ff",))
         self.assertIsNotNone(disassoc_stats)
         summaries = counter.summaries(now=102.0)
         totals = {(item.frame_type, item.total) for item in summaries}

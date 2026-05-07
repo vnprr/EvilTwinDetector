@@ -9,6 +9,8 @@ from dataclasses import asdict
 
 from wiguard.capture import CaptureConfig, WiGuardCaptureEngine
 from wiguard.capture.models import DEFAULT_ALFA_INTERFACE, DEFAULT_INTERNAL_INTERFACE, default_channels
+from wiguard.correlation import CorrelationEngine, events_from_alerts
+from wiguard.detection import DeauthStormDetector, EnvironmentAnomalyDetector
 from wiguard.features import APFeatureStateManager, FeatureExtractor, ManagementFrameCounter
 from wiguard.state import APStateManager
 
@@ -43,6 +45,10 @@ def main(argv: list[str] | None = None) -> int:
     feature_extractor = FeatureExtractor() if args.features else None
     feature_state = APFeatureStateManager(min_clock_samples=args.min_clock_samples) if args.features else None
     management_counter = ManagementFrameCounter() if args.features else None
+    deauth_detector = DeauthStormDetector() if args.features else None
+    environment_detector = EnvironmentAnomalyDetector() if args.features else None
+    correlation_engine = CorrelationEngine() if args.features else None
+    deauth_alerts = []
 
     def on_channel(channel: int, ok: bool, error: str | None) -> None:
         if args.quiet or args.json:
@@ -58,12 +64,21 @@ def main(argv: list[str] | None = None) -> int:
         _print_table(state_manager)
 
     def on_packet(packet) -> None:
-        if feature_extractor is None or feature_state is None or management_counter is None:
+        if (
+            feature_extractor is None
+            or feature_state is None
+            or management_counter is None
+            or deauth_detector is None
+        ):
             return
         vector = feature_extractor.extract(packet)
         if vector is not None:
             feature_state.update(vector)
-        management_counter.update(packet)
+        stats = management_counter.update(packet)
+        if stats is not None:
+            alert = deauth_detector.update(stats)
+            if alert.triggered:
+                deauth_alerts.append(alert)
 
     try:
         engine.run(
@@ -81,12 +96,33 @@ def main(argv: list[str] | None = None) -> int:
             "access_points": [summary.to_dict() for summary in manager.summaries()],
         }
         if args.features and feature_state is not None and management_counter is not None:
+            feature_summaries = feature_state.summaries()
+            environment_alerts = (
+                environment_detector.analyze(feature_summaries)
+                if environment_detector is not None
+                else []
+            )
+            ssid_by_bssid = {summary.bssid: summary.ssid for summary in feature_summaries}
+            correlated_alerts = (
+                correlation_engine.correlate(
+                    events_from_alerts(
+                        deauth_alerts=deauth_alerts[-50:],
+                        environment_alerts=environment_alerts,
+                        ssid_by_bssid=ssid_by_bssid,
+                    )
+                )
+                if correlation_engine is not None
+                else []
+            )
             payload["feature_access_points"] = [
-                summary.to_dict() for summary in feature_state.summaries()
+                summary.to_dict() for summary in feature_summaries
             ]
             payload["management"] = [
                 summary.to_dict() for summary in management_counter.summaries()
             ]
+            payload["deauth_alerts"] = [alert.to_dict() for alert in deauth_alerts[-50:]]
+            payload["environment_alerts"] = [alert.to_dict() for alert in environment_alerts]
+            payload["correlated_alerts"] = [alert.to_dict() for alert in correlated_alerts]
         print(json.dumps(payload, indent=2))
     else:
         _print_table(manager, final=True)

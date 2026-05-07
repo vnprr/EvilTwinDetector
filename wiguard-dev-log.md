@@ -68,3 +68,92 @@ Notes:
 Notes:
 
 - `APIdentityVerifier` is not yet wired into the live CLI as a persistent detector because it needs a real baseline lifecycle and correlation policy. The module is ready as a deterministic signal source for the next correlation/detection layer.
+
+## 2026-05-07 — Etap 2 Module 2, Deauth Storm Detection
+
+- Added `DeauthStormDetector` for anomalous deauthentication/disassociation bursts.
+- Expanded `ManagementFrameCounter` evidence:
+  - total recent management-frame rate per BSSID/channel,
+  - broadcast vs unicast totals,
+  - broadcast vs unicast recent rates,
+  - source MACs observed for the management frames.
+- Added explainable deauth storm signals:
+  - `management_frame_rate_high`,
+  - `broadcast_flood`,
+  - `targeted_unicast_burst`.
+- Wired deauth storm alerts into:
+  - live `wiguard-scan --features --json` output,
+  - offline `wiguard-analyze-pcap` output.
+- Validated with synthetic broadcast flood and targeted unicast burst tests.
+- Validated on `/tmp/wiguard_alfa_beacons.pcap`: 10 packets, 10 feature vectors, 0 management frames, 0 deauth alerts, which is the expected quiet baseline for a beacon-only capture.
+- Validated live feature scan after wiring deauth alerts with `sudo .venv/bin/wiguard-scan --duration 4 --dwell 2 --channels 1 --features --min-clock-samples 5 --json`: 154 packets, 146 AP observations, 6 AP profiles, 0 management summaries, 0 deauth alerts.
+- Confirmed after the live run that `wlo1` stayed connected and Alfa returned to `managed` / disconnected.
+- Test status after this stage: `16` tests passing.
+
+Notes:
+
+- Thresholds are currently static and configurable. Adaptive thresholds for dense environments should come later, after correlation and data collection.
+- This module is passive only; it does not generate or inject deauth frames.
+
+## 2026-05-07 — Etap 2 Module 3 Start, Environment Anomaly Detection
+
+- Added the first production-oriented implementation of `EnvironmentAnomalyDetector`.
+- Design decision: start with deterministic same-SSID peer comparison instead of adding HDBSCAN/ML immediately.
+  - This keeps the detector explainable and dependency-light.
+  - It is conservative by default: it only compares SSID groups with enough peers and enough frames per AP.
+  - It produces signals for the future correlation engine rather than final standalone verdicts.
+- Implemented same-SSID anomaly signals:
+  - `same_ssid_ie_fingerprint_outlier`,
+  - `same_ssid_vendor_oui_outlier`,
+  - `same_ssid_ie_shape_outlier`,
+  - `same_ssid_beacon_interval_outlier`.
+- Added configurable thresholds under `detection.environment_anomaly` in `config.yaml`.
+- Wired environment anomaly output into:
+  - live `wiguard-scan --features --json` as `environment_alerts`,
+  - offline `wiguard-analyze-pcap` as `environment_alerts`.
+- Added unit coverage for:
+  - quiet homogeneous same-SSID groups,
+  - minority IE fingerprint/vendor/IE-shape outliers,
+  - beacon interval outliers,
+  - conservative skipping of groups without enough same-SSID peers.
+- Validated offline analyzer on `/tmp/wiguard_alfa_beacons.pcap`: 10 packets, 10 feature vectors, 0 management frames, 0 deauth alerts, 0 environment alerts.
+- Validated live feature scan with `sudo .venv/bin/wiguard-scan --duration 4 --dwell 2 --channels 1 --features --min-clock-samples 5 --json`: 106 packets, 102 AP observations, 6 AP profiles, 0 management summaries, 0 deauth alerts, 0 environment alerts.
+- Confirmed after the live run that `wlo1` stayed connected to `UPC257567143` and Alfa `wlx00c0cab6d8f3` returned to `managed` / disconnected.
+- Test status after this stage: `20` tests passing.
+
+Notes:
+
+- Module 3 currently implements peer comparison, not full HDBSCAN clustering. This is intentional for the first reliable product slice; HDBSCAN can be added later once there is enough real capture data to tune distance metrics and avoid noisy false positives.
+- The strongest use case is an enterprise or home mesh-style SSID where several legitimate APs share the same beacon/fingerprint family and a rogue AP becomes a minority profile.
+
+## 2026-05-07 — Etap 2 Correlation Engine Start
+
+- Added `CorrelationEngine` under `wiguard.correlation`.
+- Added a normalized `DetectionEvent` model so independent modules can feed one common correlation layer.
+- Added conversion helpers for:
+  - `IdentityAlert`,
+  - `DeauthStormAlert`,
+  - `EnvironmentAnomalyAlert`.
+- Implemented deterministic per-BSSID alert correlation:
+  - weighted module scores,
+  - nonlinear multi-module multiplier,
+  - rule bonuses for key combinations such as `deauth_storm + environment_anomaly` and `identity_verification + deauth_storm + environment_anomaly`,
+  - deterministic UUIDv5 alert IDs,
+  - `info` / `suspicious` / `evil_twin` classification.
+- Wired `correlated_alerts` into:
+  - live `wiguard-scan --features --json`,
+  - offline `wiguard-analyze-pcap`.
+- Added `detection.correlation` configuration defaults to `config.yaml`.
+- Added tests proving:
+  - deauth + environment produces a `suspicious` correlated alert,
+  - identity + deauth + environment escalates to `evil_twin`,
+  - low-score evidence is filtered by `min_final_score`.
+- Validated offline analyzer after correlation wiring on `/tmp/wiguard_alfa_beacons.pcap`: 10 packets, 10 feature vectors, 0 management frames, 0 deauth alerts, 0 environment alerts, 0 correlated alerts.
+- Validated live feature scan after correlation wiring with `sudo .venv/bin/wiguard-scan --duration 4 --dwell 2 --channels 1 --features --min-clock-samples 5 --json`: 143 packets, 141 AP observations, 5 AP profiles, 0 management summaries, 0 deauth alerts, 0 environment alerts, 0 correlated alerts.
+- Confirmed after the live run that `wlo1` stayed connected to `UPC257567143` and Alfa `wlx00c0cab6d8f3` returned to `managed` / disconnected.
+- Test status after this stage: `23` tests passing.
+
+Notes:
+
+- Correlation is now ready for Module 1 identity alerts once persistent baseline lifecycle is added.
+- The engine currently correlates a single analysis window. A later production daemon should add time-window persistence, deduplication over time, and alert escalation history.
