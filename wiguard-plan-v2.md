@@ -1,5 +1,9 @@
 # WiGuard — Plan Realizacji Projektu Inżynierskiego (v2)
 
+> **ARCHIWUM KONCEPCJI (stan projektu z maja 2026).** Ten plik opisuje zarówno wykonane prace, jak i ambicje jeszcze niezrealizowane. Nie używać go jako aktualnej macierzy funkcji. W szczególności: *zero-config*, Active Verification, ML, pełna ewaluacja i Red Dashboard **nie są potwierdzone jako wdrożone w main**. Aktualny stan i backlog: [docs/PROJECT-ROADMAP.md](docs/PROJECT-ROADMAP.md). Zaktualizowany plan pracy dyplomowej: [docs/THESIS-PLAN.md](docs/THESIS-PLAN.md). Dokument audytu: [docs/CLAUDE-REPO-AUDIT.md](docs/CLAUDE-REPO-AUDIT.md).
+
+
+
 ## Wykrywanie Fałszywych Punktów Dostępu (Evil Twin) metodą Multi-Layer Fingerprinting
 
 ---
