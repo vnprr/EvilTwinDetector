@@ -1,6 +1,18 @@
 # WiGuard
 
-WiGuard is a passive Evil Twin access point detector prototype. The current milestone is the capture foundation: use the external Alfa RTL8812AU adapter in monitor mode, preserve the laptop's internal Wi-Fi connection, parse 802.11 management frames, and expose AP observations with RadioTap, RSSI, channel, and TSF data.
+WiGuard is a **passive, evidence-based Evil Twin detector prototype**. The current `main` includes monitor-mode capture, 802.11 feature extraction, identity and duplicate-BSSID signals, deauth/disassociation detection, same-SSID environment comparison, alert correlation, a persistent sensor, a read-only FastAPI API, and a basic React Blue dashboard.
+
+**Status (26 October 2026):** the code last underwent documented local validation on 7 May 2026. Those historical test results must be rerun. A Red Team lab dashboard, automated real-RF experiments, active DHCP/DNS verification and ML are **not currently implemented on `main`**. No remote `claude/*` branch or pull request is available for merge.
+
+## Current project documents
+
+- [Implementation status and Red/Blue execution backlog](docs/PROJECT-ROADMAP.md) — **current operational plan**
+- [Engineering thesis outline and experimental methodology](docs/THESIS-PLAN.md) — **current thesis plan**
+- [Claude repo audit and testing prompt](docs/CLAUDE-REPO-AUDIT.md) — a runnable audit checklist
+- [Historical May 2026 development log](wiguard-dev-log.md)
+- [Historical project concept (v2)](wiguard-plan-v2.md) — **not a checklist of shipped features**
+
+The goal is a defensible engineering thesis: rigorously tested passive detection plus a **separate, controlled Red/Blue laboratory**, not an uncontrolled network disruption toolkit. The Red side must be disabled by default and bound to authorized laboratory hardware.
 
 ## Current Hardware Decision
 
