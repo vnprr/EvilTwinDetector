@@ -1,169 +1,143 @@
-export type Classification = "clean" | "info" | "suspicious" | "evil_twin";
+// Mirrors the response models in src/wiguard/api/schemas.py.
 
-export type HealthPayload = RuntimeStats & {
-  status: string;
-  state_path: string;
-};
+export type Verdict = "clean" | "info" | "suspicious" | "evil_twin";
 
-export type RuntimeStats = {
-  schema_version: number;
-  ap_count: number;
-  raw_event_count: number;
-  alert_count: number;
-  timeline_event_count: number;
-  classification_counts: Record<string, number>;
-  latest: Record<string, number | null>;
-};
+export type Items<T> = { count: number; items: T[] };
 
-export type APListItem = {
+export type AccessPoint = {
   bssid: string;
   ssid: string;
   channels: number[];
-  last_rssi_dbm: number | null;
-  avg_rssi_dbm: number | null;
-  total_frames: number;
-  last_seen: number;
-  status: Classification;
-  last_alert: CompactAlert | null;
-};
-
-export type CompactAlert = {
-  alert_key: string;
-  classification: Classification;
-  final_score: number;
-  last_seen: number;
-  count: number;
-  contributing_modules: string[];
-};
-
-export type APDetail = {
-  snapshot: Record<string, unknown> & {
-    bssid: string;
-    ssid: string;
-    channels?: number[];
-    avg_rssi_dbm?: number | null;
-    dominant_ie_fingerprint?: string | null;
-    payload?: Record<string, unknown>;
-    total_frames?: number;
-  };
-  status: Classification;
-  alerts: CorrelatedAlert[];
-};
-
-export type CorrelatedAlert = {
-  alert_key: string;
-  alert_id: string;
-  bssid: string;
-  ssid: string;
-  final_score: number;
-  classification: Classification;
-  contributing_modules: string[];
-  signal_names: string[];
   first_seen: number;
   last_seen: number;
-  count: number;
-  status: string;
-  explanation: string;
-  timeline: DetectionEvent[];
-  payload?: Record<string, unknown>;
-  updated_at: number;
-};
-
-export type DetectionEvent = {
-  module: string;
-  bssid: string;
-  ssid: string | null;
-  score: number;
-  signal_names: string[];
-  evidence: Record<string, unknown>;
-};
-
-export type TimelineEvent = {
-  timeline_id: number;
-  observed_at: number;
-  event_type: string;
-  reference_key: string | null;
-  bssid: string | null;
-  ssid: string | null;
-  message: string;
-  payload: Record<string, unknown>;
-};
-
-export type APMetricSample = {
-  bssid: string;
-  observed_at: number;
+  frames: number;
   last_rssi_dbm: number | null;
   avg_rssi_dbm: number | null;
   rssi_stddev: number | null;
   clock_skew_ppm: number | null;
-  total_frames: number | null;
+  dominant_ie_fingerprint: string | null;
+  vendor_ouis: string[];
+  status: Verdict;
+  open_alert_id: number | null;
+  trusted: boolean;
+};
+
+export type AccessPointDetail = {
+  access_point: AccessPoint;
+  summary: Record<string, unknown>;
+  alerts: Alert[];
+};
+
+export type SignalDetail = {
+  name: string;
+  severity: "low" | "medium" | "high";
+  message: string;
+  details: Record<string, unknown>;
+};
+
+export type Evidence = {
+  module: string;
+  bssid: string;
+  ssid: string;
+  strength: number;
+  signal_names: string[];
+  signals: SignalDetail[];
+  last_seen: number;
+  context: Record<string, unknown>;
+};
+
+export type Alert = {
+  id: number;
+  bssid: string;
+  ssid: string;
+  status: "open" | "resolved";
+  classification: Exclude<Verdict, "clean">;
+  score: number;
+  modules: string[];
+  signal_names: string[];
+  explanation: string;
+  first_seen: number;
+  last_seen: number;
+  updates: number;
+  resolved_at: number | null;
+  evidence: Evidence[];
+};
+
+export type AlertDetail = { alert: Alert; timeline: TimelineEntry[] };
+
+export type TimelineEntry = {
+  id: number;
+  observed_at: number;
+  kind: string;
+  bssid: string | null;
+  ssid: string | null;
+  alert_id: number | null;
+  message: string;
+  details: Record<string, unknown>;
+};
+
+export type MetricSample = {
+  observed_at: number;
+  frames: number;
+  avg_rssi_dbm: number | null;
+  rssi_stddev: number | null;
+  clock_skew_ppm: number | null;
+};
+
+export type Stats = {
+  schema_version: number;
+  access_points: number;
+  detection_events: number;
+  alerts: number;
+  open_alerts: number;
+  open_alerts_by_classification: Record<string, number>;
+  timeline_entries: number;
+  last_update: number | null;
 };
 
 export type SensorStatus = {
-  state: "online" | "stale" | "unknown" | "replay";
-  mode?: string | null;
-  detail?: string;
+  state: "online" | "stale" | "replay" | "unknown";
   last_update: number | null;
-  stale_seconds: number | null;
-  stale_threshold_seconds?: number;
-  runtime_status: {
-    observed_at?: number;
-    interface?: string;
-    internal_interface?: string;
-    channels?: number[];
-    flush_interval_seconds?: number;
-    ap_snapshots?: number;
-    config_source?: string | null;
-    capture?: Record<string, unknown>;
-  } | null;
+  age_seconds: number | null;
+  stale_after_seconds: number | null;
+  detail: string;
+  status: Record<string, unknown> | null;
 };
 
-export type BaselineItem = {
+export type TrustedProfile = {
   bssid: string;
   ssid: string;
   frames: number;
-  dominant_ie_fingerprint: string | null;
+  ie_fingerprint: string | null;
   avg_rssi_dbm: number | null;
-  rssi_stddev: number | null;
   clock_skew_ppm: number | null;
-  sequence_reset_count: number;
+  enrolled_at: number;
 };
 
-export type BaselinePayload = {
-  baseline_path: string;
-  auto_learn: boolean;
+export type TrustedProfiles = {
+  path: string;
   enrolled: number;
-  baselines: BaselineItem[];
-  metadata?: Record<string, unknown>;
-  detail?: string;
-  error?: string;
+  profiles: TrustedProfile[];
+  error: string | null;
 };
+
+type Section = Record<string, unknown>;
 
 export type EffectiveConfig = {
   source_path: string | null;
-  capture: Record<string, unknown>;
-  runtime: Record<string, number | string>;
-  features: Record<string, number>;
-  safety: Record<string, unknown>;
+  capture: Section;
+  features: Section;
+  runtime: Section;
   detection: {
-    identity: Record<string, unknown>;
-    deauth_storm: Record<string, number>;
-    environment_anomaly: Record<string, number>;
+    identity: Section;
+    duplicate_bssid: Section;
+    deauth_storm: Section;
+    environment_anomaly: Section;
     correlation: {
-      min_final_score: number;
       module_weights: Record<string, number>;
+      suspicious_threshold: number;
+      evil_twin_threshold: number;
+      min_score: number;
     };
   };
-};
-
-export type DetectionEventRow = {
-  event_id: number;
-  observed_at: number;
-  module: string;
-  bssid: string;
-  ssid: string | null;
-  score: number;
-  signal_names: string[];
-  evidence: Record<string, unknown>;
-  payload: Record<string, unknown>;
 };

@@ -1,11 +1,11 @@
-# Prompt dla Claude — pełny audyt WiGuard na realnym kodzie (26.10.2026)
+# Prompt dla Claude — pełny audyt WiGuard na realnym kodzie (26.10.2026, ścieżki i polecenia zaktualizowane 30.10.2026)
 
 Jesteś niezależnym audytorem technicznym systemu **WiGuard** (`vnprr/EvilTwinDetector`). Zlecenie: **dokładnie przeskanuj kod, przeanalizuj algorytmy, uruchom testy i potwierdź rzeczywisty stan implementacji**. Nie zamieniaj audytu w szeroki refaktor ani implementację nowych funkcji.
 
 ## Kontrakt wykonania
 
 1. Zacznij od `git status --short --branch`, `git remote -v`, `git branch -avv`, `git log --all --decorate --oneline -n 40`; zanotuj HEAD, OS, kernel, wersje Python/Node, interfejsy/sterowniki, dostępność sprzętu.
-2. Aktualny plan i zakres z repo: `docs/PROJECT-ROADMAP.md` oraz `docs/THESIS-PLAN.md`. Stary `wiguard-plan-v2.md` to dokument historyczny, może zawierać planowane funkcjonalności opisane w trybie dokonanym.
+2. Aktualny plan i zakres z repo: `docs/PROJECT-ROADMAP.md` oraz `docs/THESIS-PLAN.md`. Stary `docs/history/wiguard-plan-v2.md` to dokument historyczny, może zawierać planowane funkcjonalności opisane w trybie dokonanym.
 3. Na zdalnym GitHubie w dniu 26.10.2026 widoczny był tylko `main`, a bazowy kod kończył się commit `609b01e` (07.05.2026). **Sprawdź lokalne `reflog`, `stash`, nieosiągalne commity, worktrees i ewentualny dawny branch `claude/*`**. Jeśli odkryjesz implementację live disconnect/deauth lub naprawy, zrób osobny diff, ocenę jakości/testów oraz dokumentację. **Nie scalaj** niezweryfikowanego kodu. Nie rób `git gc` ani nie usuwaj odzyskiwalnych commitów.
 4. Pracuj tylko w repo; nie używaj GitHub Actions do długich testów. Wykonuj lokalne, powtarzalne polecenia. Nie uruchamiaj niekontrolowanych działań radiowych, rozłączania, injection, skanowania cudzej sieci ani testów zakłócających. Eksperymenty RF uruchamiaj wyłącznie na sprzęcie laboratoryjnym i po potwierdzeniu autoryzacji oraz zakresu.
 5. **Najpierw raport bez zmian produkcyjnego kodu**. Możesz wygenerować lokalne raporty/logi; nie committuj poprawek ani nie dokładaj modułów bez osobnej decyzji. Jeśli test nie może się wykonać, zgłoś `NOT RUN` i konkretny powód; nigdy nie wpisuj PASS z pamięci, logu maja lub na podstawie oczekiwań.
@@ -15,15 +15,14 @@ Jesteś niezależnym audytorem technicznym systemu **WiGuard** (`vnprr/EvilTwinD
 ## Etap A — mapa prawdziwej implementacji
 
 Przejrzyj co najmniej:
-- `wiguard/src/wiguard/capture/*` — obsługa adaptera, monitor mode, channel hop, restore, obsługa błędów.
-- `features/*` oraz `state/*` — parser, IE, RadioTap/TSF, clock skew, RSSI, timing, sequence, agregacja i pamięć.
-- `detection/*` — identity, baselines, duplicate-BSSID residual clustering, deauth storm, environment.
-- `correlation/*` — logika score, cooldown, dedup, związki sygnałów, classification.
-- `runtime/*` — sensor, SQLite, procesy długotrwałe, restart, recovery.
-- `api/*` — FastAPI, health/status, AP, alert, WS, kontrakty, błędy, security.
+- `src/wiguard/capture/*` — obsługa adaptera, monitor mode, channel hop, restore, obsługa błędów.
+- `src/wiguard/features/*` — parser, IE, RadioTap/TSF, clock skew, RSSI, timing, sequence, profil AP.
+- `src/wiguard/detection/*` — zaufane profile, duplicate BSSID, deauth storm, environment.
+- `src/wiguard/correlation.py`, `src/wiguard/pipeline.py` — wynik, klasyfikacja, powiązanie po SSID, wspólny potok.
+- `src/wiguard/runtime/*` — sensor, SQLite, replay, cykl życia alertów.
+- `src/wiguard/api/*` — FastAPI, health/status, AP, alert, WS, kontrakty, błędy, security.
 - `dashboard/*` — React/TS, odczyt API, terminal reconnect, UX, brak danych, loading, stale records, błędy.
-- `evaluation/*`, `experiments/*`, `tests/*`, `docs/*`, `config.yaml`, `pyproject.toml`, `README.md`.
-- `active/*`, `ml/*` — czy są realne moduły, czy same puste `__init__.py`.
+- `src/wiguard/evaluation/*`, `experiments/*`, `tests/*`, `docs/*`, `config.yaml`, `pyproject.toml`, `README.md`.
 
 Macierz: **IMPLEMENTED / PARTIAL / MISSING / BROKEN / UNVERIFIED**. Do każdego twierdzenia podaj **ścieżka:linia** plus test lub eksperyment. Nie nazywaj fake/synthetic deauth generatora działającym modułem rozłączania.
 
@@ -34,10 +33,11 @@ Pracuj w izolowanym virtualenv, wykonuj polecenia zgodne z repo i loguj dokładn
 Przykładowe bramki bazowe (dostosuj tylko jeśli instrukcje repo wymagają):
 
 ```bash
-python -m pip install -e .
-python -m unittest discover -s tests -v
-wiguard-generate-fixtures tests/pcap_fixtures/synthetic
-wiguard-evaluate-fixtures tests/pcap_fixtures/synthetic/manifest.json
+python -m pip install -e ".[dev]"
+pytest -v
+ruff check src tests
+wiguard fixtures generate /tmp/fixtures && diff -r /tmp/fixtures tests/pcap_fixtures/synthetic
+wiguard fixtures evaluate tests/pcap_fixtures/synthetic/manifest.json
 cd dashboard
 npm ci            # jeśli istnieje aktualny package-lock.json; inaczej wyjaśnij wybór
 npm run typecheck
@@ -46,7 +46,7 @@ npm run build
 
 Następnie:
 - Bezpieczny smoke API na tymczasowej bazie: `GET /api/health`, `/api/aps`, `/api/alerts`, `/api/events`, `/api/stats`, przykładowy `WS /ws/live`.
-- Uruchom dashboard z demo DB, w prawdziwej przeglądarce sprawdź listę AP, szczegóły, alerty, timeline, przejścia, awarię/odłączenie API, pustą bazę. Nie zaliczaj samego `vite build` jako testu UI.
+- Uruchom dashboard z bazą z `wiguard replay`, w prawdziwej przeglądarce sprawdź listę AP, szczegóły, alerty, timeline, przejścia, awarię/odłączenie API, pustą bazę. Nie zaliczaj samego `vite build` jako testu UI.
 - Unit i integracyjne testy ze sztucznymi danymi są **oddzielne** od live RF tests. Pokaż liczby PASS/FAIL/ERROR/SKIP dla każdej bramki.
 - Jeśli prawdziwy adapter jest dostępny, sprawdź **tylko pasywny** nasłuch i recovery, bez zakłócania aktywnego połączenia internetowego. Przed ingerencją w interfejs potwierdź, że to adapter laboratoryjny. Jeśli brak adaptera — status `NOT RUN`.
 

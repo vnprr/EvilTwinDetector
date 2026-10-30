@@ -1,61 +1,62 @@
 import type {
-  APDetail,
-  APListItem,
-  APMetricSample,
-  BaselinePayload,
-  CorrelatedAlert,
-  DetectionEventRow,
+  AccessPoint,
+  AccessPointDetail,
+  Alert,
+  AlertDetail,
   EffectiveConfig,
-  HealthPayload,
-  RuntimeStats,
+  Items,
+  MetricSample,
   SensorStatus,
-  TimelineEvent,
+  Stats,
+  TimelineEntry,
+  TrustedProfiles,
 } from "./types";
 
-const API_BASE = (import.meta.env.VITE_WIGUARD_API_BASE ?? "http://127.0.0.1:8765").replace(/\/$/, "");
+export const apiBase = (import.meta.env.VITE_WIGUARD_API_BASE ?? "http://127.0.0.1:8765").replace(/\/$/, "");
 
-async function request<T>(path: string): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`);
+async function get<T>(path: string): Promise<T> {
+  const response = await fetch(`${apiBase}${path}`);
   if (!response.ok) {
-    const detail = await response.text();
-    throw new Error(`${response.status} ${response.statusText}: ${detail}`);
+    let detail = response.statusText;
+    try {
+      detail = (await response.json()).detail ?? detail;
+    } catch {
+      // keep the status text
+    }
+    throw new Error(`${response.status}: ${typeof detail === "string" ? detail : JSON.stringify(detail)}`);
   }
-  return response.json() as Promise<T>;
+  return (await response.json()) as T;
 }
 
-export const apiBase = API_BASE;
+async function items<T>(path: string): Promise<T[]> {
+  return (await get<Items<T>>(path)).items;
+}
+
+const ap = (bssid: string) => `/api/aps/${encodeURIComponent(bssid)}`;
+
+export type AlertFilter = { status?: string; classification?: string };
 
 export const api = {
-  health: () => request<HealthPayload>("/api/health"),
-  stats: () => request<RuntimeStats & { state_path: string }>("/api/stats"),
-  aps: async () => (await request<{ count: number; items: APListItem[] }>("/api/aps")).items,
-  apDetail: (bssid: string) => request<APDetail>(`/api/aps/${encodeURIComponent(bssid)}`),
-  apTimeline: async (bssid: string) =>
-    (await request<{ count: number; items: TimelineEvent[] }>(`/api/aps/${encodeURIComponent(bssid)}/timeline?limit=200`)).items,
-  apMetrics: async (bssid: string) =>
-    (await request<{ count: number; items: APMetricSample[] }>(`/api/aps/${encodeURIComponent(bssid)}/metrics?limit=500`)).items,
-  alerts: async (query = "") =>
-    (await request<{ count: number; items: CorrelatedAlert[] }>(`/api/alerts${query}`)).items,
-  alertDetail: (alertKey: string) => request<{ alert: CorrelatedAlert; timeline: TimelineEvent[] }>(`/api/alerts/${encodeURIComponent(alertKey)}`),
-  events: async (limit = 100) =>
-    (await request<{ count: number; items: DetectionEventRow[] }>(`/api/events?limit=${limit}`)).items,
-  timeline: async (afterId?: number) => {
-    const suffix = afterId && afterId > 0 ? `?after_id=${afterId}&limit=100` : "?limit=100";
-    return (await request<{ count: number; items: TimelineEvent[] }>(`/api/timeline${suffix}`)).items;
+  stats: () => get<Stats>("/api/stats"),
+  sensor: () => get<SensorStatus>("/api/sensor"),
+  config: () => get<EffectiveConfig>("/api/config"),
+  trustedProfiles: () => get<TrustedProfiles>("/api/trusted-profiles"),
+  accessPoints: () => items<AccessPoint>("/api/aps"),
+  accessPoint: (bssid: string) => get<AccessPointDetail>(ap(bssid)),
+  metrics: (bssid: string) => items<MetricSample>(`${ap(bssid)}/metrics?limit=500`),
+  alerts: (filter: AlertFilter) => {
+    const query = new URLSearchParams(Object.entries(filter).filter(([, value]) => value) as [string, string][]);
+    return items<Alert>(`/api/alerts${query.size ? `?${query}` : ""}`);
   },
-  config: () => request<EffectiveConfig>("/api/config"),
-  sensor: () => request<SensorStatus>("/api/sensor"),
-  baseline: () => request<BaselinePayload>("/api/baseline"),
+  alert: (id: number) => get<AlertDetail>(`/api/alerts/${id}`),
+  timeline: (afterId?: number) => items<TimelineEntry>(`/api/timeline?limit=200${afterId ? `&after_id=${afterId}` : ""}`),
 };
 
-export function exportUrl(name: "alerts" | "aps" | "events"): string {
-  return `${API_BASE}/api/export/${name}.csv`;
-}
+export const exportUrl = (name: "alerts" | "aps" | "events") => `${apiBase}/api/export/${name}.csv`;
 
-export function liveWebSocketUrl(afterId = 0): string {
-  const url = new URL(API_BASE);
+export function liveUrl(afterId: number): string {
+  const url = new URL(`${apiBase}/ws/live`);
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
-  url.pathname = "/ws/live";
-  url.search = `after_id=${afterId}`;
+  url.searchParams.set("after_id", String(afterId));
   return url.toString();
 }

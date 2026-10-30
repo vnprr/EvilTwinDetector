@@ -1,84 +1,74 @@
-# WiGuard sensor configuration.
+# WiGuard configuration.
 #
-# This file is a real, single source of truth: it is loaded and validated by
-# `wiguard.config.load_config` and the values below are used to build the
-# detectors. Editing a threshold here changes detector behaviour. Command-line
-# flags (e.g. `wiguard-sensor --dwell 1.0`) override the matching value here;
-# this file overrides the built-in defaults in `wiguard/config.py`.
-#
-# Unknown keys are rejected on load, so a typo fails loudly instead of being
-# silently ignored.
-#
-# The first production prototype uses the external Alfa RTL8812AU adapter only.
-# Do not use the laptop's internal Wi-Fi interface for monitor mode capture.
+# Every value here is live: it is validated on load (unknown keys and
+# out-of-range values are rejected) and used to build the detectors.
+# Command-line flags override this file; omitted keys use built-in defaults.
+# The full list of keys and defaults is in src/wiguard/config.py.
 
 capture:
-  interface: wlx00c0cab6d8f3
-  internal_interface: wlo1
-  restore_managed_on_exit: true
+  interface: wlx00c0cab6d8f3        # external Alfa RTL8812AU, switched to monitor mode
+  internal_interface: wlo1          # the host's own Wi-Fi: never touched
+  require_internal_connected: true  # abort if the host's Wi-Fi is not connected
+  channels: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13,
+             36, 40, 44, 48, 52, 56, 60, 64, 100, 104, 108, 112, 116, 120, 124, 128,
+             132, 136, 140, 144, 149, 153, 157, 161, 165]
   dwell_seconds: 0.5
-  channels_2ghz: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
-  channels_5ghz: [36, 40, 44, 48, 52, 56, 60, 64, 100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 144, 149, 153, 157, 161, 165]
+  monitor_settle_seconds: 0.25
+  channel_settle_seconds: 0.05
+  restore_managed_on_exit: true
 
-state:
-  rolling_window_size: 300
+features:
+  window_size: 300                  # frames kept per AP for rolling statistics
+  clock_min_samples: 50             # TSF samples before a clock-skew estimate exists
+  disruption_window_seconds: 10.0   # sliding window for deauth/disassoc rates
+
+detection:
+  identity:
+    trusted_profiles_path: .wiguard/trusted-profiles.json   # written by `wiguard enroll`
+    enrollment_min_frames: 50
+    min_frames: 10                  # frames an AP needs before it is compared
+    clock_skew_delta_ppm: 5.0
+    rssi_shift_db: 12.0
+
+  duplicate_bssid:
+    min_samples: 30
+    min_cluster_samples: 8
+    residual_gap_us: 10000.0        # minimum gap between the two clock bands
+    separation_factor: 4.0          # gap must exceed this many band widths
+    min_transitions: 4              # bands must alternate in time (twin, not restart)
+    rssi_split_db: 10.0
+
+  deauth_storm:
+    deauth_rate_threshold: 10.0     # frames per second
+    disassoc_rate_threshold: 5.0
+    broadcast_rate_threshold: 5.0
+    unicast_rate_threshold: 5.0
+
+  environment_anomaly:
+    min_frames: 5
+    min_same_ssid_aps: 3
+    majority_ratio: 0.6
+    vendor_oui_distance_threshold: 0.75
+    ie_shape_distance_threshold: 0.45
+    beacon_interval_delta_tu: 20
+
+  correlation:
+    # score = 1 - prod(1 - weight * strength) over modules; see src/wiguard/correlation.py
+    module_weights:
+      identity_verification: 0.70
+      environment_anomaly: 0.60
+      deauth_storm: 0.55
+    suspicious_threshold: 0.45
+    evil_twin_threshold: 0.80
+    min_score: 0.20
 
 runtime:
   state_path: .wiguard/wiguard.db
   flush_interval_seconds: 5.0
-  alert_cooldown_seconds: 300.0
-  window_seconds: 300.0
+  evidence_window_seconds: 300.0    # how long a finished deauth storm still counts
+  alert_resolve_seconds: 300.0      # open alert without new evidence -> resolved
 
 api:
   host: 127.0.0.1
   port: 8765
-  state_path: .wiguard/wiguard.db
-  cors_origins: ["http://localhost:5173"]
-
-features:
-  clock_skew_min_samples: 50
-  clock_skew_window_size: 300
-  management_recent_window_seconds: 10.0
-  # The set of dynamic IE ids excluded from the stable fingerprint is defined
-  # in code as `wiguard.features.ie_fingerprint.DYNAMIC_IE_IDS` (its single
-  # source of truth) and is intentionally not duplicated here.
-
-detection:
-  identity:
-    baseline_path: .wiguard/identity-baselines.json
-    auto_learn: false
-    min_baseline_frames: 50
-    clock_skew_delta_ppm: 5.0
-    rssi_shift_db: 12.0
-    duplicate_bssid:
-      min_samples: 30
-      min_cluster_samples: 8
-      residual_gap_threshold_us: 10000.0
-      intercept_delta_threshold_us: 10000.0
-      sequence_transition_threshold: 4
-  deauth_storm:
-    deauth_rate_threshold: 10.0
-    disassoc_rate_threshold: 5.0
-    broadcast_rate_threshold: 5.0
-    unicast_rate_threshold: 5.0
-  environment_anomaly:
-    min_frames: 5
-    min_same_ssid_peers: 3
-    majority_ratio: 0.6
-    vendor_oui_distance_threshold: 0.75
-    ie_shape_distance_threshold: 0.45
-    beacon_interval_delta_tu: 20.0
-  correlation:
-    min_final_score: 0.2
-    module_weights:
-      identity_verification: 0.45
-      deauth_storm: 0.35
-      environment_anomaly: 0.35
-      active_verification: 0.6
-
-safety:
-  require_internal_wifi_connected: true
-  # Advisory guard-rail surfaced to the operator. WiGuard never spawns these
-  # commands; the entry documents what must not be run against the capture host.
-  forbidden_commands:
-    - airmon-ng check kill
+  cors_origins: [http://localhost:5173, http://127.0.0.1:5173]

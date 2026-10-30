@@ -1,10 +1,10 @@
-# WiGuard — stan projektu i plan zamknięcia Red/Blue (26.10.2026)
+# WiGuard — stan projektu i plan zamknięcia Red/Blue (aktualizacja 30.10.2026)
 
-> **Dokument operacyjny, źródło prawdy dla kolejnych prac.** Historyczny `wiguard-plan-v2.md` pozostaje materiałem koncepcyjnym. Ten dokument rozdziela stan *potwierdzony w kodzie main*, deklaracje z dawnych testów i planowane funkcjonalności. Nie przypisywać niezrealizowanym modułom statusu „gotowe”.
+> **Dokument operacyjny, źródło prawdy dla kolejnych prac.** Rozdziela stan *potwierdzony w kodzie i testach* od planowanych funkcjonalności. Nie przypisywać niezrealizowanym modułom statusu „gotowe”. Archiwalna wizja: [history/wiguard-plan-v2.md](history/wiguard-plan-v2.md).
 
 ## 0. Cel i ograniczenie zakresu
 
-**Produkt/temat pracy:** niezależny, w pierwszej kolejności pasywny detektor fałszywych AP (Evil Twin), działający na zwykłych adapterach Wi-Fi, z wyjaśnialnymi alarmami. System ma zostać oceniony w powtarzalnym laboratorium.
+**Produkt/temat pracy:** niezależny, pasywny detektor fałszywych AP (Evil Twin), działający na zwykłych adapterach Wi-Fi, z wyjaśnialnymi alarmami. System ma zostać oceniony w powtarzalnym laboratorium.
 
 - **Blue** — detektor, sensor, historia, evidence, dashboard i eksport.
 - **Red** — **oddzielny laboratoryjny kontroler scenariuszy**, konfiguracja własnego AP / imitacji, kontrolowane testy odporności, kalendarz przebiegu, ground truth i porównanie wyników Blue.
@@ -12,65 +12,57 @@
 - **Cel akademicki:** wykrywalność, czas detekcji, FPR/FNR, ablation i powtarzalność; nie pełny komercyjny WIPS czy platforma ofensywna.
 - **Wymagania nienegocjowalne:** Red nie może wykonywać działań radiowych poza jawnie zatwierdzoną, izolowaną siecią laboratoryjną; brak przypadkowego użycia istniejącego interfejsu internetowego, brak auto-containment z poziomu Blue. Red domyślnie dry-run / disabled.
 
-## 1. Stan zdalnego repo
+## 1. Stan kodu
 
-- Repo: `vnprr/EvilTwinDetector`, jedyna gałąź zdalna w dniu przeglądu: `main`. Brak zdalnej `claude/*` i brak PR do scalenia.
-- **Kod bazowy oceniany:** `609b01e5606b903ff8043eb81f821f23acdcd643` (2026-05-07).
-- Historyczny dziennik `wiguard-dev-log.md`: 49 testów backendu, 5/5 scenariuszy syntetycznych, frontend typecheck/build zaliczone **w maju 2026**. To **nie są wyniki świeżo uruchomionych testów**.
-- Oczekiwana historyczna implementacja Claude (np. moduł live disconnect/deauth) **nie jest obecna w zdalnym main**. Sprawdzić lokalne `git branch -a`, `git reflog`, `git fsck --no-reflogs`, inne kopie i stash **zanim** stwierdzi się utratę kodu. Nie importować znalezionej gałęzi bez diffu, testów i kontroli bezpieczeństwa.
-- Plik `wiguard-plan-v2.md` opisuje warianty jeszcze **niezaimplementowane**; stwierdzenia typu „zero-config”, „prawdopodobieństwo”, „4 moduły” i ML nie mogą być przenoszone do raportu z realizacji bez dowodów.
+- 30.10.2026 cały kod przeczytano i przebudowano od fundamentów; lista znalezionych błędów i zmian: [audits/2026-10-30-przebudowa.md](audits/2026-10-30-przebudowa.md). Architektura: [ARCHITECTURE.md](ARCHITECTURE.md).
+- Bramki (uruchomione 30.10.2026, bez sprzętu radiowego): `pytest` 112 zaliczonych / 1 pominięty (wymaga nagrania z karty), `ruff` bez uwag, `wiguard fixtures evaluate` 10/10, dashboard typecheck + build, test w Chromium wszystkich widoków bez błędów konsoli.
+- **NOT RUN:** przechwytywanie na żywo (brak karty w środowisku przeglądu). Na maszynie laboratoryjnej należy ponownie wykonać enrollment (zmienił się format fingerprintu IE) i użyć nowej bazy stanu (schemat 3).
+- Dziennik z maja 2026 ([history/wiguard-dev-log.md](history/wiguard-dev-log.md)) opisuje poprzednią wersję kodu.
 
-## 2. Macierz implementacji (kod main; stan historyczny)
+## 2. Macierz implementacji
 
-| Obszar | Stan | Dowód / uwaga |
+| Obszar | Stan | Dowód |
 |---|---|---|
-| Adapter monitor mode (Alfa RTL8812AU) | **ZAIMPLEMENTOWANE, historyczny smoke test** | `capture/*`, `docs/hardware/alfa-rtl8812au.md`; potwierdzić ponownie na docelowym Linux |
-| Beacon/probe response, RadioTap, RSSI, kanał, TSF, BSSID | **ZAIMPLEMENTOWANE** | parser, state, `wiguard-scan` |
-| IE fingerprint / vendor OUI / beacon timing / sequence | **ZAIMPLEMENTOWANE** | `features/*`, analyzer PCAP |
-| Clock skew: rolling linear regression | **ZAIMPLEMENTOWANE** | nie mylić z walidacją stabilności na wielu urządzeniach |
-| Jawny baseline i `APIdentityVerifier` | **ZAIMPLEMENTOWANE** | trzeba sprawdzić lifecycle, zmiany konfiguracji, restart i drift |
-| Same-BSSID duplicate detector | **ZAIMPLEMENTOWANE** | residual split + dodatkowe potwierdzenie; niezależna walidacja RF konieczna |
-| Deauth/disassoc *detection* | **ZAIMPLEMENTOWANE** | liczniki / `DeauthStormDetector`; nie jest to generator ramek |
-| Same-SSID peer/environment anomaly | **ZAIMPLEMENTOWANE, regułowe** | nie HDBSCAN/ML |
-| Correlation / alerty `info, suspicious, evil_twin` | **ZAIMPLEMENTOWANE** | scoring heurystyczny, a **nie skalibrowane prawdopodobieństwo** |
-| Long-running sensor + SQLite | **ZAIMPLEMENTOWANE** | `runtime/*`, retencja/wyścigi/błędy do audytu |
-| Read-only API FastAPI / WebSocket | **ZAIMPLEMENTOWANE** | `api/*` |
-| Dashboard operatora / Blue (React + TS) | **MVP ZAIMPLEMENTOWANE** | widok AP/alertów/osi czasu; brak potwierdzenia jakości realnego UX |
-| PCAP offline + syntetyczne fixture/evaluator | **ZAIMPLEMENTOWANE** | 5 scenariuszy syntetycznych to regresja, nie test skuteczności w eterze |
-| `config.yaml` jako czynna konfiguracja | **NIEPOTWIERDZONE / ryzyko P0** | audyt wskazał brak czytnika YAML i rozbieżne domyślne wartości |
-| Active Verification DHCP/DNS/TCP | **BRAK** | pusty `active/`; opcjonalne po zakończeniu ewaluacji pasywnej |
-| ML / firmware classifier | **BRAK** | pusty `ml/`; nieobowiązkowe |
-| Dashboard Red + kontroler laboratorium | **BRAK** | do zbudowania jako osobny obszar z izolacją i kontrolą uprawnień |
-| Live deauth/disconnect lab-only | **BRAK na main** | istnieje analiza deauth i syntetyczne ramki; nie istnieje potwierdzony live injector |
-| Systematyczne eksperymenty real RF, multi-chipset | **BRAK WYNIKÓW** | wymagane do pracy inżynierskiej |
+| Adapter monitor mode (Alfa RTL8812AU), skakanie po kanałach, przywracanie karty | **ZAIMPLEMENTOWANE**, test sprzętowy z maja 2026 | `capture/*`, `docs/hardware/alfa-rtl8812au.md` |
+| Parser ramek (beacon, probe response, deauth, disassoc; RadioTap; IE z surowych TLV) | **ZAIMPLEMENTOWANE** | `features/frames.py`, `tests/test_features.py` |
+| Fingerprint IE, clock skew, sekwencje (RFC 1982), interwał beaconów, RSSI | **ZAIMPLEMENTOWANE** | `features/*` |
+| Zaufane profile: jawny enrollment, dryf profilu, nieznany BSSID dla zaufanego SSID | **ZAIMPLEMENTOWANE** | `detection/identity.py`, `wiguard enroll` |
+| Duplikat BSSID: dwa przeplatające się zegary, konflikt kanałów | **ZAIMPLEMENTOWANE** | `detection/duplicate.py` |
+| Burze deauth/disassoc jako epizody | **ZAIMPLEMENTOWANE** (detekcja, nie generator) | `detection/deauth.py` |
+| Porównanie z AP o tym samym SSID | **ZAIMPLEMENTOWANE, regułowe** | `detection/environment.py` |
+| Korelacja noisy-OR, powiązanie po SSID, werdykty `info/suspicious/evil_twin` | **ZAIMPLEMENTOWANE**; wynik heurystyczny, **nie prawdopodobieństwo** | `correlation.py`, `tests/test_correlation.py` |
+| Jeden potok dla scan / sensor / analyze / replay / ewaluacji | **ZAIMPLEMENTOWANE** | `pipeline.py` |
+| `config.yaml` jako czynna konfiguracja z walidacją | **ZAIMPLEMENTOWANE** | `config.py`, `tests/test_config.py` |
+| Sensor ciągły + SQLite, alert jako incydent (otwarcie/eskalacja/zamknięcie) | **ZAIMPLEMENTOWANE** | `runtime/*`, `tests/test_runtime.py` |
+| Replay pcap z harmonogramem sensora (podstawa TTD) | **ZAIMPLEMENTOWANE** | `runtime/replay.py`, `wiguard replay` |
+| API tylko do odczytu (SQLite `mode=ro`), WebSocket, eksport CSV, OpenAPI | **ZAIMPLEMENTOWANE** | `api/*` |
+| Dashboard Blue (AP, alerty z dowodami per detektor, trendy, oś czasu, system) | **ZAIMPLEMENTOWANE** | `dashboard/` |
+| Scenariusze syntetyczne + ewaluator z macierzą pomyłek | **ZAIMPLEMENTOWANE** (regresja, nie dowód skuteczności w eterze) | `evaluation/*`, `tests/pcap_fixtures/synthetic` |
+| Active Verification DHCP/DNS/TCP, ML | **BRAK** (świadomie poza zakresem) | — |
+| Dashboard Red + kontroler laboratorium, ground truth | **BRAK** | P2 |
+| Eksperymenty na prawdziwym RF, drugi chipset | **BRAK WYNIKÓW** | P3 |
 
 ## 3. Priorytety wykonania
 
-### P0 — Audyt bazowy i integralność (bez dokładania funkcji)
+### P0 — Audyt bazowy i integralność — **ZAMKNIĘTE 30.10.2026**
 
-- [ ] Zamrozić SHA bazowe, środowisko Python/Node/OS/driver, wykonać inwentaryzację modułów oraz zależności. Utworzyć tabelę **implemented / partially / missing / broken**, z odniesieniem do pliku, funkcji i testu.
-- [ ] Ponownie uruchomić backend unit/integration, evaluator syntetyczny, typecheck/build frontendu, API smoke i dashboard smoke. Raportować `PASS/FAIL/SKIP/NOT RUN` i liczbę rzeczywiście wykonanych testów; jawnie pokazać hardware-only skippy.
-- [ ] Sprawdzić wyjątkowości i poprawność parsowania TSF/Radiotap, monotonic time, kanałów, sekwencji, IE, management counters oraz stanów AP. Ujawnić różnice pomiędzy Scapy/danymi z różnych driverów.
-- [ ] Rozstrzygnąć sprawę `config.yaml`: albo prawdziwy loader z walidacją, albo usunąć pozornie aktywne konfiguracje i mieć jedno źródło wartości. Test: zmiana progu w config faktycznie zmienia wynik detekcji.
-- [ ] Zweryfikować reguły correlatora: wagowanie, podwójne liczenie zależnych sygnałów, okna czasowe, cooldown, deterministyczność, skale i nazewnictwo `confidence`. Nie nazywać wyniku prawdopodobieństwem bez kalibracji.
-- [ ] Audyt baseline (explicit learning, untrusted start, restart, zmiana BSSID/SSID, poisoning, persistence), bez niewidocznego automatycznego zaufania.
-- [ ] Runtime i API: SQLite locking/atomic updates, zamknięcie procesu, idempotencja, recovery, retencja, streaming, sanitizacja wejść, brak ekspozycji API na sieć publiczną bez kontroli.
-- [ ] Uaktualnić README: nie nazywać projektu wyłącznie capture foundation, nie opisywać planowanych elementów jako istniejących.
-- [ ] Zbadać lokalne/reflog ślady dawnej pracy Claude i oddzielnie ocenić, czy odzyskiwany kod warto integrować.
+- [x] Pełny przegląd kodu i bramek testowych (pkt 1).
+- [x] Parsowanie TSF/RadioTap, czas, kanały, sekwencje, IE, liczniki, stany AP — poprawione i pokryte testami.
+- [x] `config.yaml` jest jedynym źródłem wartości; test: zmiana progu zmienia wynik.
+- [x] Korelacja: bez podwójnego liczenia, okna czasowe, cykl życia alertów, wynik nie nazywany prawdopodobieństwem.
+- [x] Zaufane profile: tylko jawny enrollment, brak automatycznego zaufania, restart AP daje `info`, a nie alarm.
+- [x] Runtime i API: API fizycznie tylko do odczytu, zapis w jednej transakcji, retencja metryk, czytelne błędy schematu.
+- [x] README zgodne ze stanem faktycznym.
 
-**Kryterium wyjścia P0:** odtwarzalne polecenia testowe, jawny status każdego testu i lista ryzyk z priorytetem. Bez przepisywania architektury „przy okazji”.
+### P1 — Blue i ewaluator o wartości badawczej — **W WIĘKSZOŚCI ZAMKNIĘTE**
 
-### P1 — Doprowadzić Blue i ewaluator do wartości badawczej
-
-- [ ] Jednolita tożsamość sensora/AP, rozróżnienie SSID/BSSID/physically distinct emitter, jednoznaczne okna i znaczniki czasu.
-- [ ] Przemyślany model evidence: obserwacje → sygnały → alert; jawne pochodzenie, czas, źródło i powody klasyfikacji, bez zawyżania pewności.
-- [ ] Blue Dashboard: status sensora i interfejsu; lista AP, wykrytych anomalii i alertów; szczegóły dowodów, trend RSSI/TSF/clock, timeline i filtrowanie; stan awarii, stale-data, brak danych, reconnect WS; eksport.
-- [ ] Funkcja zarządzania zaufanym baseline z jawnym enrollment/lock/wersjonowaniem (nie mylić z jednym kliknięciem „trusted” bez śladu).
-- [ ] Odtwarzalny tryb offline/replay PCAP i eksport **CSV/JSON** wyników surowych, agregatów, alarmów i metadanych sesji.
-- [ ] Minimum analityki: próg i zależność od miejsca, fałszywe alarmy dla legalnego roamingu/restartu/zmiany kanału, metryki capture loss i channel dwell.
-- [ ] Spójny kontrakt API/DTO/websocket; testy integracyjne i E2E dashboardu na deterministycznych danych.
-
-**Kryterium wyjścia P1:** operator rozumie *które obserwacje* spowodowały alert, a eksperymentator potrafi odtworzyć ocenę na tej samej próbce.
+- [x] Model evidence: obserwacje → sygnały (z poziomem ważności i komunikatem) → zdarzenie modułu → alert z wyjaśnieniem.
+- [x] Dashboard: stan sensora, lista AP, alerty z dowodami, trendy RSSI/skew, oś czasu, stany awarii/stale/replay, eksport.
+- [x] Jawny enrollment zaufanych profili (`wiguard enroll`), bez „zaufaj” jednym kliknięciem.
+- [x] Odtwarzalny replay pcap i eksport CSV/JSON.
+- [x] Spójny kontrakt API (modele pydantic, OpenAPI) i testy API.
+- [ ] Wersjonowanie/blokada pliku profili (np. podpis lub historia zmian) — opcjonalne.
+- [ ] Analiza FP dla roamingu i zmian kanału na prawdziwym RF — należy do P3.
 
 ### P2 — Red Laboratory Controller i automatyzacja ground truth
 
@@ -114,7 +106,7 @@
 
 ## 5. Kolejność i priorytety dyplomu
 
-1. **Najpierw audyt i naprawy P0**. Nie dodawać nowych algorytmów/ML.
+1. ~~Audyt i naprawy P0~~ (zamknięte 30.10.2026). Nie dodawać ML.
 2. **Dane i Blue P1** — możliwość wyjaśnienia i odtworzenia alertu.
 3. **Minimalny Red P2** do eksperymentów (nie framework pentestingowy).
 4. **P3 badania** i opis systemu zgodny ze stanem faktycznym.
@@ -124,6 +116,7 @@
 
 - Plan pracy: [THESIS-PLAN.md](THESIS-PLAN.md).
 - Prompt audytu Claude: [CLAUDE-REPO-AUDIT.md](CLAUDE-REPO-AUDIT.md).
-- `wiguard-plan-v2.md` — archiwalny plan wizyjny; **nie jest backlogiem realizacyjnym**.
-- `wiguard-dev-log.md` — dziennik historyczny; wpis „testy zielone” = stan z daty wpisu.
+- [ARCHITECTURE.md](ARCHITECTURE.md) — architektura i logika detekcji.
+- [history/wiguard-plan-v2.md](history/wiguard-plan-v2.md) — archiwalny plan wizyjny; **nie jest backlogiem realizacyjnym**.
+- [history/wiguard-dev-log.md](history/wiguard-dev-log.md) — dziennik historyczny; wpis „testy zielone” = stan z daty wpisu.
 - `README.md` — instrukcja uruchomienia / faktyczna funkcjonalność, nie lista marzeń.

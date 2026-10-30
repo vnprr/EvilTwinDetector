@@ -4,26 +4,40 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "wiguard"
-version = "0.1.0"
-description = "Passive Evil Twin access point detector foundation."
+version = "0.2.0"
+description = "Passive, evidence-based Evil Twin Wi-Fi detector."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-  "fastapi>=0.115.0",
-  "httpx>=0.27.0",
+  "fastapi>=0.115",
+  "pydantic>=2.7",
   "pyyaml>=6.0",
-  "scapy>=2.5.0",
-  "uvicorn[standard]>=0.30.0",
+  "scapy>=2.5",
+  "uvicorn[standard]>=0.30",
+]
+
+[project.optional-dependencies]
+dev = [
+  "httpx>=0.27",
+  "pytest>=8",
+  "ruff>=0.6",
 ]
 
 [project.scripts]
-wiguard-analyze-pcap = "wiguard.pcap_analyzer:main"
-wiguard-api = "wiguard.api.server:main"
-wiguard-evaluate-fixtures = "wiguard.evaluation.runner:main"
-wiguard-generate-fixtures = "wiguard.evaluation.synthetic:main"
-wiguard-replay = "wiguard.replay:main"
-wiguard-scan = "wiguard.cli:main"
-wiguard-sensor = "wiguard.runtime.sensor:main"
+wiguard = "wiguard.cli:main"
 
 [tool.setuptools.packages.find]
-where = ["wiguard/src"]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = ["ignore:Using `httpx` with `starlette.testclient` is deprecated"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B", "I", "UP", "SIM", "RUF"]

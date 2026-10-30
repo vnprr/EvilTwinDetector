@@ -12,12 +12,10 @@ import json
 import os
 import shutil
 import subprocess
-import sys
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
-
 
 ALFA_IFACE = "wlx00c0cab6d8f3"
 INTERNAL_IFACE = "wlo1"

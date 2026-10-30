@@ -80,5 +80,5 @@
 
 - Bieżący backlog techniczny: [PROJECT-ROADMAP.md](PROJECT-ROADMAP.md).
 - Instrukcja testowania: [CLAUDE-REPO-AUDIT.md](CLAUDE-REPO-AUDIT.md).
-- Stary plan `../wiguard-plan-v2.md` jest **archiwalną wizją**. Nie traktować stanu planu jako stanu kodu.
+- Stary plan [history/wiguard-plan-v2.md](history/wiguard-plan-v2.md) jest **archiwalną wizją**. Nie traktować stanu planu jako stanu kodu.
 - Rękopis pracy istnieje jako osobny dokument roboczy; jego aktualizacje muszą wynikać z audytu i zmierzonych wyników. Plan w tym pliku jest spójny z redakcją v0.3 i nie zastępuje pełnego tekstu.
