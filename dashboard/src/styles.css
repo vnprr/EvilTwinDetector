@@ -366,6 +366,7 @@ select {
 .mini-list {
   display: grid;
   gap: 8px;
+  align-content: start;
 }
 
 .alert-row,
@@ -621,4 +622,26 @@ h3 svg {
   vertical-align: -2px;
   margin-right: 5px;
   color: var(--muted);
+}
+
+/* --- AP trends + inline notices --- */
+
+.notice.inline {
+  margin: 10px 0;
+  padding: 10px;
+  font-size: 0.82rem;
+}
+
+.trend {
+  margin-top: 6px;
+}
+
+.trend h4 {
+  margin: 10px 0 2px;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+h4 {
+  margin-top: 0;
 }

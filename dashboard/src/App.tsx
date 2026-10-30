@@ -21,6 +21,8 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Line,
+  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -30,6 +32,7 @@ import { api, apiBase, exportUrl, liveWebSocketUrl } from "./api";
 import type {
   APDetail,
   APListItem,
+  APMetricSample,
   BaselinePayload,
   Classification,
   CorrelatedAlert,
@@ -68,6 +71,7 @@ export function App() {
   const [selectedBssid, setSelectedBssid] = useState<string | null>(null);
   const [selectedAlertKey, setSelectedAlertKey] = useState<string | null>(null);
   const [apDetail, setApDetail] = useState<APDetail | null>(null);
+  const [apMetrics, setApMetrics] = useState<APMetricSample[]>([]);
   const [alertDetail, setAlertDetail] = useState<CorrelatedAlert | null>(null);
   const [alertTimeline, setAlertTimeline] = useState<TimelineEvent[]>([]);
   const [classificationFilter, setClassificationFilter] = useState("");
@@ -126,11 +130,18 @@ export function App() {
     async function loadDetail() {
       if (!selectedBssid) {
         setApDetail(null);
+        setApMetrics([]);
         return;
       }
       try {
-        const detail = await api.apDetail(selectedBssid);
-        if (active) setApDetail(detail);
+        const [detail, metrics] = await Promise.all([
+          api.apDetail(selectedBssid),
+          api.apMetrics(selectedBssid).catch(() => []),
+        ]);
+        if (active) {
+          setApDetail(detail);
+          setApMetrics(metrics);
+        }
       } catch (cause) {
         if (active) setError(cause instanceof Error ? cause.message : String(cause));
       }
@@ -274,7 +285,9 @@ export function App() {
             <span>
               {sensorStatus.state === "stale"
                 ? `Sensor feed looks stale — last update ${formatAge(sensorStatus.stale_seconds)} ago.`
-                : sensorStatus.detail ?? "No live sensor status; this may be an offline replay database."}
+                : sensorStatus.state === "replay"
+                  ? "Viewing a replayed pcap import, not a live sensor feed."
+                  : sensorStatus.detail ?? "No live sensor status; this may be an offline replay database."}
             </span>
           </div>
         )}
@@ -317,7 +330,14 @@ export function App() {
               />
             )}
             {view === "ap-detail" && (
-              <APDetailView aps={aps} selectedAp={selectedAp} detail={apDetail} onSelect={setSelectedBssid} />
+              <APDetailView
+                aps={aps}
+                selectedAp={selectedAp}
+                detail={apDetail}
+                metrics={apMetrics}
+                baseline={baseline}
+                onSelect={setSelectedBssid}
+              />
             )}
             {view === "activity" && <ActivityView timeline={timeline} />}
             {view === "system" && (
@@ -468,7 +488,21 @@ function AlertsView(props: {
   );
 }
 
-function APDetailView({ aps, selectedAp, detail, onSelect }: { aps: APListItem[]; selectedAp: APListItem | null; detail: APDetail | null; onSelect: (bssid: string) => void }) {
+function APDetailView({
+  aps,
+  selectedAp,
+  detail,
+  metrics,
+  baseline,
+  onSelect,
+}: {
+  aps: APListItem[];
+  selectedAp: APListItem | null;
+  detail: APDetail | null;
+  metrics: APMetricSample[];
+  baseline: BaselinePayload | null;
+  onSelect: (bssid: string) => void;
+}) {
   return (
     <section className="split">
       <div className="panel compact-list">
@@ -498,6 +532,8 @@ function APDetailView({ aps, selectedAp, detail, onSelect }: { aps: APListItem[]
               <Fact label="RSSI" value={formatDbm((detail.snapshot.avg_rssi_dbm as number | null) ?? null)} />
               <Fact label="Fingerprint" value={String(detail.snapshot.dominant_ie_fingerprint ?? "-")} />
             </div>
+            <EnrollHint bssid={String(detail.snapshot.bssid)} baseline={baseline} />
+            <MetricTrends metrics={metrics} />
             <h3>Open alerts</h3>
             <div className="mini-list">
               {detail.alerts.map((alert) => (
@@ -529,6 +565,69 @@ function ActivityView({ timeline }: { timeline: TimelineEvent[] }) {
       </div>
       <TimelineList items={[...timeline].reverse()} />
     </section>
+  );
+}
+
+function EnrollHint({ bssid, baseline }: { bssid: string; baseline: BaselinePayload | null }) {
+  if (!baseline) return null;
+  const trusted = baseline.baselines.some((item) => item.bssid.toLowerCase() === bssid.toLowerCase());
+  if (trusted) return <p className="muted small">✓ In trusted baseline.</p>;
+  return (
+    <div className="notice info inline">
+      <Info size={16} />
+      <span>
+        Not in the trusted baseline, so identity checks can't flag impersonation of it. Learn baselines
+        from a known-good capture: <code>wiguard-scan --identity-baseline {baseline.baseline_path} --identity-learn</code>
+      </span>
+    </div>
+  );
+}
+
+function MetricTrends({ metrics }: { metrics: APMetricSample[] }) {
+  if (!metrics.length) return null;
+  return (
+    <>
+      <h3><Activity size={15} /> Trends</h3>
+      <MetricTrend title="RSSI" data={metrics} dataKey="avg_rssi_dbm" unit="dBm" color="#285a84" />
+      <MetricTrend title="Clock skew" data={metrics} dataKey="clock_skew_ppm" unit="ppm" color="#c2410c" />
+    </>
+  );
+}
+
+function MetricTrend({
+  title,
+  data,
+  dataKey,
+  unit,
+  color,
+}: {
+  title: string;
+  data: APMetricSample[];
+  dataKey: "avg_rssi_dbm" | "clock_skew_ppm";
+  unit: string;
+  color: string;
+}) {
+  const points = data.filter((sample) => sample[dataKey] !== null && sample[dataKey] !== undefined);
+  if (points.length < 2) {
+    return (
+      <p className="muted small">
+        {title}: not enough history yet ({points.length} sample{points.length === 1 ? "" : "s"}).
+      </p>
+    );
+  }
+  return (
+    <div className="trend">
+      <h4>{title} <span className="muted">({unit})</span></h4>
+      <ResponsiveContainer width="100%" height={130}>
+        <LineChart data={points} margin={{ top: 4, right: 8, bottom: 0, left: -12 }}>
+          <CartesianGrid strokeDasharray="3 3" vertical={false} />
+          <XAxis dataKey="observed_at" tickFormatter={formatClock} tick={{ fontSize: 10 }} minTickGap={40} />
+          <YAxis tick={{ fontSize: 10 }} width={46} />
+          <Tooltip labelFormatter={(value) => formatTime(Number(value))} />
+          <Line type="monotone" dataKey={dataKey} stroke={color} dot={false} strokeWidth={2} isAnimationActive={false} />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
   );
 }
 
@@ -599,11 +698,11 @@ function SensorHealth({ sensor }: { sensor: SensorStatus }) {
       </div>
       {sensor.detail && <p className="explanation">{sensor.detail}</p>}
       <div className="facts-grid">
+        <Fact label="Mode" value={sensor.mode ?? sensor.state} />
         <Fact label="Capture iface" value={rs?.interface ?? "-"} />
         <Fact label="Protected iface" value={rs?.internal_interface ?? "-"} />
         <Fact label="Channels" value={rs?.channels?.length ? String(rs.channels.length) : "-"} />
         <Fact label="Flush (s)" value={rs?.flush_interval_seconds != null ? String(rs.flush_interval_seconds) : "-"} />
-        <Fact label="APs (last flush)" value={rs?.ap_snapshots != null ? String(rs.ap_snapshots) : "-"} />
         <Fact label="Config source" value={rs?.config_source ?? "defaults"} />
       </div>
     </>
@@ -729,6 +828,10 @@ function formatDbm(value: number | null | undefined): string {
 
 function formatTime(epochSeconds: number): string {
   return new Date(epochSeconds * 1000).toLocaleString();
+}
+
+function formatClock(epochSeconds: number): string {
+  return new Date(epochSeconds * 1000).toLocaleTimeString();
 }
 
 function mergeTimeline(current: TimelineEvent[], incoming: TimelineEvent[]): TimelineEvent[] {

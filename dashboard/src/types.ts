@@ -89,8 +89,19 @@ export type TimelineEvent = {
   payload: Record<string, unknown>;
 };
 
+export type APMetricSample = {
+  bssid: string;
+  observed_at: number;
+  last_rssi_dbm: number | null;
+  avg_rssi_dbm: number | null;
+  rssi_stddev: number | null;
+  clock_skew_ppm: number | null;
+  total_frames: number | null;
+};
+
 export type SensorStatus = {
-  state: "online" | "stale" | "unknown";
+  state: "online" | "stale" | "unknown" | "replay";
+  mode?: string | null;
   detail?: string;
   last_update: number | null;
   stale_seconds: number | null;

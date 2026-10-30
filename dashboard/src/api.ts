@@ -1,6 +1,7 @@
 import type {
   APDetail,
   APListItem,
+  APMetricSample,
   BaselinePayload,
   CorrelatedAlert,
   DetectionEventRow,
@@ -31,6 +32,8 @@ export const api = {
   apDetail: (bssid: string) => request<APDetail>(`/api/aps/${encodeURIComponent(bssid)}`),
   apTimeline: async (bssid: string) =>
     (await request<{ count: number; items: TimelineEvent[] }>(`/api/aps/${encodeURIComponent(bssid)}/timeline?limit=200`)).items,
+  apMetrics: async (bssid: string) =>
+    (await request<{ count: number; items: APMetricSample[] }>(`/api/aps/${encodeURIComponent(bssid)}/metrics?limit=500`)).items,
   alerts: async (query = "") =>
     (await request<{ count: number; items: CorrelatedAlert[] }>(`/api/alerts${query}`)).items,
   alertDetail: (alertKey: string) => request<{ alert: CorrelatedAlert; timeline: TimelineEvent[] }>(`/api/alerts/${encodeURIComponent(alertKey)}`),
