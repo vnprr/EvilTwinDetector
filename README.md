@@ -87,6 +87,11 @@ sudo .venv/bin/wiguard sensor
 uv run wiguard api
 ```
 
+`scan`, `sensor` and a live `enroll` accept `--save-pcap FILE`: every captured
+packet is also written to a pcap, so the same run can be replayed later
+(`wiguard replay`) with another configuration — e.g. for the baseline and
+ablation runs of an experiment.
+
 Enrollment is always an explicit command: learning automatically would also
 learn an attacker who is already on the air.
 
@@ -94,8 +99,8 @@ learn an attacker who is already on the air.
 
 | Command | Purpose |
 |---|---|
-| `wiguard scan` | short live scan, prints APs and alerts (`--json` for machine output) |
-| `wiguard sensor` | continuous capture; writes the SQLite state database every flush |
+| `wiguard scan` | short live scan, prints APs and alerts (`--json` for machine output, `--save-pcap` to keep the capture) |
+| `wiguard sensor` | continuous capture; writes the SQLite state database every flush (`--save-pcap` to keep the capture) |
 | `wiguard enroll` | trusted profiles from a live capture (`--duration`) or a pcap (`--pcap`) |
 | `wiguard analyze PCAP` | offline analysis of a capture |
 | `wiguard replay PCAP` | offline analysis into a state database for the dashboard |

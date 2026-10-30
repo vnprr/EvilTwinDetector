@@ -39,7 +39,9 @@ pakiet ─► parse_frame ─► BeaconFrame ─┬─► APTracker (profil AP) 
 daje dokładnie ten sam wynik co analiza na żywo. `wiguard replay` dodatkowo
 wywołuje ocenę co `flush_interval_seconds` czasu nagrania, tak jak sensor robi to w
 czasie rzeczywistym: znaczniki alertów w powtórce odpowiadają chwilom, w których
-sensor by je zgłosił (podstawa pomiaru TTD).
+sensor by je zgłosił (podstawa pomiaru TTD). Opcja `--save-pcap` poleceń `scan`,
+`sensor` i `enroll` zapisuje odebrane pakiety do pliku, więc jeden przebieg na żywo
+można później odtworzyć z inną konfiguracją (metoda odniesienia, ablacja).
 
 ## 3. Cechy
 

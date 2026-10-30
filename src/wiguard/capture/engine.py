@@ -6,9 +6,11 @@ import logging
 import time
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
+from pathlib import Path
 from typing import Any
 
 from scapy.sendrecv import sniff
+from scapy.utils import PcapWriter
 
 from wiguard.config import CaptureSettings
 
@@ -39,6 +41,9 @@ class ChannelHoppingCapture:
     The adapter is put into monitor mode on start and restored on exit, and the
     host's own Wi-Fi connection is checked before and after the run. Ctrl+C
     ends the capture early; whatever was captured so far is kept.
+
+    With ``save_to``, every captured packet is also written to a pcap file, so
+    the same run can later be replayed with another configuration.
     """
 
     def __init__(self, settings: CaptureSettings) -> None:
@@ -52,15 +57,19 @@ class ChannelHoppingCapture:
         *,
         duration_seconds: float | None = None,
         on_hop: HopCallback | None = None,
+        save_to: Path | None = None,
     ) -> CaptureStats:
         settings = self.settings
         self.adapter.preflight(require_internal_connected=settings.require_internal_connected)
         deadline = None if duration_seconds is None else time.monotonic() + duration_seconds
+        writer = PcapWriter(str(save_to), sync=True) if save_to is not None else None
         self.adapter.enter_monitor()
         time.sleep(settings.monitor_settle_seconds)
 
         def handle(packet: Any) -> None:
             self.stats.packets += 1
+            if writer is not None:
+                writer.write(packet)
             on_packet(packet)
 
         try:
@@ -91,6 +100,8 @@ class ChannelHoppingCapture:
             self.stats.interrupted = True
             log.info("Capture interrupted; keeping what was captured.")
         finally:
+            if writer is not None:
+                writer.close()
             if settings.restore_managed_on_exit:
                 self.adapter.restore_managed()
             if settings.require_internal_connected and not self.adapter.internal_connected():

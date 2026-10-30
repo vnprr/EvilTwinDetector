@@ -41,7 +41,9 @@ class Sensor:
         self.on_flush = on_flush
         self._next_flush = 0.0
 
-    def run(self, *, duration_seconds: float | None = None) -> RecordSummary:
+    def run(
+        self, *, duration_seconds: float | None = None, save_to: Path | None = None
+    ) -> RecordSummary:
         with StateWriter.open(self.state_path) as store:
             self._next_flush = time.time() + self.config.runtime.flush_interval_seconds
 
@@ -54,7 +56,9 @@ class Sensor:
                 tick()
 
             try:
-                self.capture.run(on_packet, duration_seconds=duration_seconds, on_hop=tick)
+                self.capture.run(
+                    on_packet, duration_seconds=duration_seconds, on_hop=tick, save_to=save_to
+                )
             finally:
                 summary = self.flush(store)
         return summary

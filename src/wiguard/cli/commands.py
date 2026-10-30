@@ -45,6 +45,15 @@ Channels = Annotated[
 Dwell = Annotated[
     float | None, typer.Option(help="Seconds per channel.", rich_help_panel="Capture")
 ]
+SavePcap = Annotated[
+    Path | None,
+    typer.Option(
+        "--save-pcap",
+        dir_okay=False,
+        help="Also write every captured packet to this pcap (to replay the run later).",
+        rich_help_panel="Capture",
+    ),
+]
 Profiles = Annotated[Path | None, typer.Option("--profiles", help="Trusted profiles file.")]
 StatePath = Annotated[Path | None, typer.Option(help="SQLite state database.")]
 Json = Annotated[bool, typer.Option("--json", help="Machine-readable JSON output.")]
@@ -102,6 +111,7 @@ def scan(
     iface: Iface = None,
     channels: Channels = None,
     dwell: Dwell = None,
+    save_pcap: SavePcap = None,
     profiles: Profiles = None,
     as_json: Json = False,
 ) -> None:
@@ -110,7 +120,7 @@ def scan(
     pipeline = DetectionPipeline.from_config(config)
     capture = ChannelHoppingCapture(config.capture)
     with stderr.status(f"Scanning {len(config.capture.channels)} channels for {duration:g} s ..."):
-        capture.run(pipeline.process, duration_seconds=duration)
+        capture.run(pipeline.process, duration_seconds=duration, save_to=save_pcap)
     _output(pipeline.evaluate(), as_json, capture=capture.stats.to_dict())
 
 
@@ -121,6 +131,7 @@ def sensor(
     iface: Iface = None,
     channels: Channels = None,
     dwell: Dwell = None,
+    save_pcap: SavePcap = None,
     profiles: Profiles = None,
     state_path: StatePath = None,
     as_json: Json = False,
@@ -135,7 +146,7 @@ def sensor(
 
     runner = Sensor(config, on_flush=json_line if as_json else None)
     logging.info("Sensor writing to %s (Ctrl+C to stop).", runner.state_path)
-    final = runner.run(duration_seconds=duration)
+    final = runner.run(duration_seconds=duration, save_to=save_pcap)
     logging.info("Stopped: %d APs, %d open alert(s).", final.access_points, final.open_alerts)
 
 
@@ -156,6 +167,7 @@ def enroll_profiles(
     iface: Iface = None,
     channels: Channels = None,
     dwell: Dwell = None,
+    save_pcap: SavePcap = None,
 ) -> None:
     """Record trusted profiles of your own APs, from a pcap or a live capture.
 
@@ -169,7 +181,9 @@ def enroll_profiles(
     else:
         pipeline = DetectionPipeline(config)  # no profiles: they are what we are creating
         with stderr.status(f"Capturing for {duration:g} s; keep the environment known-good ..."):
-            ChannelHoppingCapture(config.capture).run(pipeline.process, duration_seconds=duration)
+            ChannelHoppingCapture(config.capture).run(
+                pipeline.process, duration_seconds=duration, save_to=save_pcap
+            )
         result = pipeline.evaluate()
 
     identity = config.detection.identity
