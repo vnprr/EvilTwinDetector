@@ -1,4 +1,13 @@
-# WiGuard default local sensor configuration.
+# WiGuard sensor configuration.
+#
+# This file is a real, single source of truth: it is loaded and validated by
+# `wiguard.config.load_config` and the values below are used to build the
+# detectors. Editing a threshold here changes detector behaviour. Command-line
+# flags (e.g. `wiguard-sensor --dwell 1.0`) override the matching value here;
+# this file overrides the built-in defaults in `wiguard/config.py`.
+#
+# Unknown keys are rejected on load, so a typo fails loudly instead of being
+# silently ignored.
 #
 # The first production prototype uses the external Alfa RTL8812AU adapter only.
 # Do not use the laptop's internal Wi-Fi interface for monitor mode capture.
@@ -29,8 +38,10 @@ api:
 features:
   clock_skew_min_samples: 50
   clock_skew_window_size: 300
-  management_recent_window_seconds: 10
-  dynamic_ie_ids_excluded_from_fingerprint: [5, 11, 37, 40]
+  management_recent_window_seconds: 10.0
+  # The set of dynamic IE ids excluded from the stable fingerprint is defined
+  # in code as `wiguard.features.ie_fingerprint.DYNAMIC_IE_IDS` (its single
+  # source of truth) and is intentionally not duplicated here.
 
 detection:
   identity:
@@ -67,5 +78,7 @@ detection:
 
 safety:
   require_internal_wifi_connected: true
+  # Advisory guard-rail surfaced to the operator. WiGuard never spawns these
+  # commands; the entry documents what must not be run against the capture host.
   forbidden_commands:
     - airmon-ng check kill

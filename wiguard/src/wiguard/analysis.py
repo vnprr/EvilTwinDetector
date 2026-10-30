@@ -7,6 +7,7 @@ from pathlib import Path
 
 from scapy.all import rdpcap
 
+from wiguard.config import WiGuardConfig
 from wiguard.correlation import CorrelationEngine, events_from_alerts
 from wiguard.detection import (
     APIdentityVerifier,
@@ -20,6 +21,13 @@ from wiguard.features import APFeatureStateManager, FeatureExtractor, Management
 
 @dataclass(frozen=True)
 class PcapAnalysisConfig:
+    """Legacy flat analysis config.
+
+    Retained for existing callers/tests. For full, file-driven configuration of
+    every detector (including deauth/environment/correlation thresholds) pass a
+    :class:`wiguard.config.WiGuardConfig` to :func:`analyze_pcap` instead.
+    """
+
     min_clock_samples: int = 5
     window_size: int = 300
     identity_baseline: Path | None = None
@@ -32,44 +40,77 @@ class PcapAnalysisConfig:
     duplicate_residual_gap_us: float = 10_000.0
 
 
-def analyze_pcap(pcap: Path | str, *, config: PcapAnalysisConfig | None = None) -> dict[str, object]:
-    """Run the full offline WiGuard detection pipeline on one pcap."""
+def analyze_pcap(
+    pcap: Path | str,
+    *,
+    config: PcapAnalysisConfig | None = None,
+    wiguard_config: WiGuardConfig | None = None,
+) -> dict[str, object]:
+    """Run the full offline WiGuard detection pipeline on one pcap.
+
+    When ``wiguard_config`` is given, every detector is built from it, so the
+    deauth, environment and correlation thresholds in ``config.yaml`` take
+    effect here. Otherwise the legacy flat ``PcapAnalysisConfig`` is used, which
+    keeps the historical behaviour (and fixture-friendly ``min_clock_samples``)
+    unchanged.
+    """
 
     pcap_path = Path(pcap)
-    config = config or PcapAnalysisConfig()
     extractor = FeatureExtractor()
-    ap_state = APFeatureStateManager(
-        window_size=config.window_size,
-        min_clock_samples=config.min_clock_samples,
-    )
-    management_counter = ManagementFrameCounter()
-    deauth_detector = DeauthStormDetector()
-    environment_detector = EnvironmentAnomalyDetector()
-    correlation_engine = CorrelationEngine()
-    duplicate_detector = DuplicateBSSIDDetector(
-        min_samples=config.duplicate_min_samples,
-        min_cluster_samples=config.duplicate_min_cluster_samples,
-        residual_gap_threshold_us=config.duplicate_residual_gap_us,
-        clock_skew_delta_ppm=config.identity_clock_skew_delta_ppm,
-        rssi_delta_db=config.identity_rssi_shift_db,
-    )
-    identity_store = (
-        IdentityBaselineStore(config.identity_baseline)
-        if config.identity_baseline is not None
-        else None
-    )
-    identity_baselines = identity_store.load() if identity_store is not None else ()
-    identity_verifier = (
-        APIdentityVerifier(
-            min_baseline_frames=config.identity_min_baseline_frames,
-            clock_skew_delta_ppm=config.identity_clock_skew_delta_ppm,
-            rssi_shift_db=config.identity_rssi_shift_db,
-            baselines=identity_baselines,
-            auto_baseline=False,
+
+    if wiguard_config is not None:
+        ap_state = wiguard_config.build_feature_state()
+        management_counter = wiguard_config.build_management_counter()
+        deauth_detector = wiguard_config.build_deauth_detector()
+        environment_detector = wiguard_config.build_environment_detector()
+        correlation_engine = wiguard_config.build_correlation_engine()
+        duplicate_detector = wiguard_config.build_duplicate_detector()
+        identity_store = wiguard_config.identity_baseline_store()
+        identity_learn = wiguard_config.detection.identity.auto_learn
+        identity_min_baseline_frames = wiguard_config.detection.identity.min_baseline_frames
+        identity_baselines = identity_store.load() if identity_store is not None else ()
+        identity_verifier = (
+            wiguard_config.build_identity_verifier(identity_baselines)
+            if identity_store is not None
+            else None
         )
-        if identity_store is not None
-        else None
-    )
+    else:
+        config = config or PcapAnalysisConfig()
+        ap_state = APFeatureStateManager(
+            window_size=config.window_size,
+            min_clock_samples=config.min_clock_samples,
+        )
+        management_counter = ManagementFrameCounter()
+        deauth_detector = DeauthStormDetector()
+        environment_detector = EnvironmentAnomalyDetector()
+        correlation_engine = CorrelationEngine()
+        duplicate_detector = DuplicateBSSIDDetector(
+            min_samples=config.duplicate_min_samples,
+            min_cluster_samples=config.duplicate_min_cluster_samples,
+            residual_gap_threshold_us=config.duplicate_residual_gap_us,
+            clock_skew_delta_ppm=config.identity_clock_skew_delta_ppm,
+            rssi_delta_db=config.identity_rssi_shift_db,
+        )
+        identity_store = (
+            IdentityBaselineStore(config.identity_baseline)
+            if config.identity_baseline is not None
+            else None
+        )
+        identity_learn = config.identity_learn
+        identity_min_baseline_frames = config.identity_min_baseline_frames
+        identity_baselines = identity_store.load() if identity_store is not None else ()
+        identity_verifier = (
+            APIdentityVerifier(
+                min_baseline_frames=config.identity_min_baseline_frames,
+                clock_skew_delta_ppm=config.identity_clock_skew_delta_ppm,
+                rssi_shift_db=config.identity_rssi_shift_db,
+                baselines=identity_baselines,
+                auto_baseline=False,
+            )
+            if identity_store is not None
+            else None
+        )
+
     packets = rdpcap(str(pcap_path))
     feature_vectors = 0
     management_frames = 0
@@ -95,9 +136,9 @@ def analyze_pcap(pcap: Path | str, *, config: PcapAnalysisConfig | None = None) 
     identity_alerts = []
     identity_metadata = None
     if identity_verifier is not None:
-        if config.identity_learn:
+        if identity_learn:
             for summary in ap_summaries:
-                if summary.frames >= config.identity_min_baseline_frames:
+                if summary.frames >= identity_min_baseline_frames:
                     identity_verifier.force_baseline(summary)
         else:
             identity_alerts = [
@@ -105,7 +146,7 @@ def analyze_pcap(pcap: Path | str, *, config: PcapAnalysisConfig | None = None) 
                 for alert in (identity_verifier.update(summary) for summary in ap_summaries)
                 if alert.triggered
             ]
-        if identity_store is not None and config.identity_learn:
+        if identity_store is not None and identity_learn:
             identity_metadata = identity_store.save(identity_verifier.baselines()).to_dict()
         elif identity_store is not None:
             identity_metadata = identity_store.metadata.to_dict()

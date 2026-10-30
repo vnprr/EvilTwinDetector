@@ -7,45 +7,35 @@ import json
 import sys
 import time
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
 from wiguard.capture import CaptureConfig, WiGuardCaptureEngine
-from wiguard.capture.models import DEFAULT_ALFA_INTERFACE, DEFAULT_INTERNAL_INTERFACE, default_channels
-from wiguard.correlation import CorrelationEngine, events_from_alerts
-from wiguard.detection import (
-    APIdentityVerifier,
-    DeauthStormDetector,
-    DuplicateBSSIDDetector,
-    EnvironmentAnomalyDetector,
-    IdentityBaselineStore,
-)
-from wiguard.features import APFeatureStateManager, FeatureExtractor, ManagementFrameCounter
+from wiguard.config import DEFAULT_CONFIG_PATH, WiGuardConfig, load_config
+from wiguard.correlation import events_from_alerts
+from wiguard.detection import IdentityBaselineStore
+from wiguard.features import FeatureExtractor
 from wiguard.runtime.store import DEFAULT_STATE_PATH, RuntimeStore
-from wiguard.state import APStateManager
 
 
 @dataclass(frozen=True)
 class SensorRuntimeConfig:
-    """Configuration for a passive sensor run."""
+    """Operational configuration for a passive sensor run.
+
+    Detector thresholds live in ``wiguard_config`` (loaded from ``config.yaml``);
+    the fields here are the run-level knobs the CLI exposes.
+    """
 
     capture: CaptureConfig
+    wiguard_config: WiGuardConfig = field(default_factory=WiGuardConfig)
     state_path: Path = DEFAULT_STATE_PATH
     duration_seconds: float | None = None
     flush_interval_seconds: float = 5.0
     alert_cooldown_seconds: float = 300.0
     runtime_window_seconds: float = 300.0
-    window_size: int = 300
-    min_clock_samples: int = 50
     identity_baseline: Path | None = None
     identity_learn: bool = False
-    identity_min_baseline_frames: int = 50
-    identity_clock_skew_delta_ppm: float = 5.0
-    identity_rssi_shift_db: float = 12.0
-    duplicate_min_samples: int = 30
-    duplicate_min_cluster_samples: int = 8
-    duplicate_residual_gap_us: float = 10_000.0
     json_events: bool = False
     quiet: bool = False
 
@@ -55,25 +45,17 @@ class WiGuardSensor:
 
     def __init__(self, config: SensorRuntimeConfig) -> None:
         self.config = config
-        self.ap_state = APStateManager(window_size=config.window_size)
+        cfg = config.wiguard_config
+        self.identity_min_baseline_frames = cfg.detection.identity.min_baseline_frames
+        self.ap_state = cfg.build_ap_state()
         self.engine = WiGuardCaptureEngine(config.capture, state_manager=self.ap_state)
         self.feature_extractor = FeatureExtractor()
-        self.feature_state = APFeatureStateManager(
-            window_size=config.window_size,
-            min_clock_samples=config.min_clock_samples,
-        )
-        self.management_counter = ManagementFrameCounter()
-        self.deauth_detector = DeauthStormDetector()
-        self.environment_detector = EnvironmentAnomalyDetector()
-        self.correlation_engine = CorrelationEngine()
-        self.duplicate_detector = DuplicateBSSIDDetector(
-            window_size=config.window_size,
-            min_samples=config.duplicate_min_samples,
-            min_cluster_samples=config.duplicate_min_cluster_samples,
-            residual_gap_threshold_us=config.duplicate_residual_gap_us,
-            clock_skew_delta_ppm=config.identity_clock_skew_delta_ppm,
-            rssi_delta_db=config.identity_rssi_shift_db,
-        )
+        self.feature_state = cfg.build_feature_state()
+        self.management_counter = cfg.build_management_counter()
+        self.deauth_detector = cfg.build_deauth_detector()
+        self.environment_detector = cfg.build_environment_detector()
+        self.correlation_engine = cfg.build_correlation_engine()
+        self.duplicate_detector = cfg.build_duplicate_detector()
         self.identity_store = (
             IdentityBaselineStore(config.identity_baseline)
             if config.identity_baseline is not None
@@ -81,13 +63,7 @@ class WiGuardSensor:
         )
         identity_baselines = self.identity_store.load() if self.identity_store is not None else ()
         self.identity_verifier = (
-            APIdentityVerifier(
-                min_baseline_frames=config.identity_min_baseline_frames,
-                clock_skew_delta_ppm=config.identity_clock_skew_delta_ppm,
-                rssi_shift_db=config.identity_rssi_shift_db,
-                baselines=identity_baselines,
-                auto_baseline=False,
-            )
+            cfg.build_identity_verifier(identity_baselines, auto_baseline=False)
             if self.identity_store is not None
             else None
         )
@@ -163,6 +139,7 @@ class WiGuardSensor:
         ]
         if self.config.identity_learn and self.identity_store is not None:
             self.identity_store.save(self.identity_verifier.baselines())
+        store.set_runtime_status(self._runtime_status(observed_at, feature_summaries, records))
         self.last_flush_monotonic = time.monotonic()
         payload = {
             "event": "sensor_flush",
@@ -191,7 +168,7 @@ class WiGuardSensor:
             return []
         if self.config.identity_learn:
             for summary in feature_summaries:
-                if summary.frames >= self.config.identity_min_baseline_frames:
+                if summary.frames >= self.identity_min_baseline_frames:
                     self.identity_verifier.force_baseline(summary)
             return []
         return [
@@ -215,6 +192,27 @@ class WiGuardSensor:
             self.deauth_alerts.popleft()
         return [alert for _observed, alert in self.deauth_alerts]
 
+    def _runtime_status(
+        self,
+        observed_at: float,
+        feature_summaries,
+        records,
+    ) -> dict[str, object]:
+        return {
+            "observed_at": observed_at,
+            "capture": self.engine.stats.to_dict(),
+            "interface": self.config.capture.interface,
+            "internal_interface": self.config.capture.internal_interface,
+            "channels": list(self.config.capture.channels),
+            "flush_interval_seconds": self.config.flush_interval_seconds,
+            "ap_snapshots": len(feature_summaries),
+            "correlated_alerts_this_flush": len(records),
+            "identity_baseline": str(self.config.identity_baseline)
+            if self.config.identity_baseline is not None
+            else None,
+            "config_source": self.config.wiguard_config.source_path,
+        }
+
     def _final_payload(self, store: RuntimeStore) -> dict[str, object]:
         return {
             "capture": self.engine.stats.to_dict(),
@@ -227,26 +225,29 @@ class WiGuardSensor:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Run the long-running passive WiGuard sensor")
-    parser.add_argument("--iface", default=DEFAULT_ALFA_INTERFACE, help="external Alfa capture interface")
-    parser.add_argument("--internal-iface", default=DEFAULT_INTERNAL_INTERFACE, help="internal Wi-Fi interface that must stay connected")
+    pre = argparse.ArgumentParser(add_help=False)
+    pre.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH, help="path to config.yaml")
+    pre_args, _ = pre.parse_known_args(argv)
+    cfg = load_config(pre_args.config)
+
+    parser = argparse.ArgumentParser(
+        parents=[pre],
+        description="Run the long-running passive WiGuard sensor. "
+        "Detector thresholds come from config.yaml; flags below override run-level options.",
+    )
+    parser.add_argument("--iface", default=cfg.capture.interface, help="external Alfa capture interface")
+    parser.add_argument("--internal-iface", default=cfg.capture.internal_interface, help="internal Wi-Fi interface that must stay connected")
     parser.add_argument("--duration", type=float, default=None, help="sensor duration in seconds; omit for continuous mode")
-    parser.add_argument("--dwell", type=float, default=0.5, help="seconds to dwell on each channel")
-    parser.add_argument("--channels", default=None, help="comma-separated channel list; default scans 2.4 GHz and 5 GHz")
-    parser.add_argument("--state-path", type=Path, default=DEFAULT_STATE_PATH, help="SQLite runtime state path")
-    parser.add_argument("--flush-interval", type=float, default=5.0, help="seconds between state flushes")
-    parser.add_argument("--alert-cooldown", type=float, default=300.0, help="seconds to deduplicate repeated correlated alerts")
-    parser.add_argument("--runtime-window", type=float, default=300.0, help="seconds of recent management-frame evidence to correlate")
-    parser.add_argument("--window-size", type=int, default=300, help="rolling feature window size")
-    parser.add_argument("--min-clock-samples", type=int, default=50, help="minimum TSF samples for clock-skew estimate")
-    parser.add_argument("--identity-baseline", type=Path, default=None, help="trusted AP identity baseline JSON path")
+    parser.add_argument("--dwell", type=float, default=cfg.capture.dwell_seconds, help="seconds to dwell on each channel")
+    parser.add_argument("--channels", default=None, help="comma-separated channel list; default from config")
+    parser.add_argument("--state-path", type=Path, default=Path(cfg.runtime.state_path), help="SQLite runtime state path")
+    parser.add_argument("--flush-interval", type=float, default=cfg.runtime.flush_interval_seconds, help="seconds between state flushes")
+    parser.add_argument("--alert-cooldown", type=float, default=cfg.runtime.alert_cooldown_seconds, help="seconds to deduplicate repeated correlated alerts")
+    parser.add_argument("--runtime-window", type=float, default=cfg.runtime.window_seconds, help="seconds of recent management-frame evidence to correlate")
+    parser.add_argument("--window-size", type=int, default=cfg.state.rolling_window_size, help="rolling feature window size (overrides config)")
+    parser.add_argument("--min-clock-samples", type=int, default=cfg.features.clock_skew_min_samples, help="minimum TSF samples for clock-skew estimate (overrides config)")
+    parser.add_argument("--identity-baseline", type=Path, default=None, help="trusted AP identity baseline JSON path; identity checks run only when set")
     parser.add_argument("--identity-learn", action="store_true", help="learn or refresh trusted identity baselines during this run")
-    parser.add_argument("--identity-min-baseline-frames", type=int, default=50, help="minimum frames required to learn an identity baseline")
-    parser.add_argument("--identity-clock-skew-delta-ppm", type=float, default=5.0, help="clock-skew delta threshold for identity alerts")
-    parser.add_argument("--identity-rssi-shift-db", type=float, default=12.0, help="RSSI shift threshold for identity alerts")
-    parser.add_argument("--duplicate-min-samples", type=int, default=30, help="minimum same-BSSID TSF samples for duplicate detection")
-    parser.add_argument("--duplicate-min-cluster-samples", type=int, default=8, help="minimum samples in each residual cluster")
-    parser.add_argument("--duplicate-residual-gap-us", type=float, default=10_000.0, help="minimum TSF residual gap for duplicate-BSSID detection")
     parser.add_argument("--json-events", action="store_true", help="emit one JSON line per sensor flush")
     parser.add_argument("--quiet", action="store_true", help="suppress status output")
     args = parser.parse_args(argv)
@@ -257,30 +258,35 @@ def main(argv: list[str] | None = None) -> int:
     if args.runtime_window <= 0:
         parser.error("--runtime-window must be positive")
 
-    capture = CaptureConfig(
+    # Fold run-level overrides back into the config so the detectors that read
+    # window/clock-sample settings observe the overridden values too.
+    cfg = replace(
+        cfg,
+        state=replace(cfg.state, rolling_window_size=args.window_size),
+        features=replace(
+            cfg.features,
+            clock_skew_window_size=args.window_size,
+            clock_skew_min_samples=args.min_clock_samples,
+        ),
+    )
+
+    capture = cfg.capture_config(
         interface=args.iface,
         internal_interface=args.internal_iface,
-        channels=_parse_channels(args.channels) if args.channels else default_channels(),
+        channels=_parse_channels(args.channels) if args.channels else None,
         dwell_seconds=args.dwell,
     )
     sensor = WiGuardSensor(
         SensorRuntimeConfig(
             capture=capture,
+            wiguard_config=cfg,
             state_path=args.state_path,
             duration_seconds=args.duration,
             flush_interval_seconds=args.flush_interval,
             alert_cooldown_seconds=args.alert_cooldown,
             runtime_window_seconds=args.runtime_window,
-            window_size=args.window_size,
-            min_clock_samples=args.min_clock_samples,
             identity_baseline=args.identity_baseline,
             identity_learn=args.identity_learn,
-            identity_min_baseline_frames=args.identity_min_baseline_frames,
-            identity_clock_skew_delta_ppm=args.identity_clock_skew_delta_ppm,
-            identity_rssi_shift_db=args.identity_rssi_shift_db,
-            duplicate_min_samples=args.duplicate_min_samples,
-            duplicate_min_cluster_samples=args.duplicate_min_cluster_samples,
-            duplicate_residual_gap_us=args.duplicate_residual_gap_us,
             json_events=args.json_events,
             quiet=args.quiet,
         )

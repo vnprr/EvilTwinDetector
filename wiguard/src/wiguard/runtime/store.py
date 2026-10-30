@@ -154,6 +154,30 @@ class RuntimeStore:
         ).fetchone()
         return int(row["value"]) if row is not None else 0
 
+    def set_runtime_status(self, status: dict[str, object]) -> None:
+        """Persist the latest sensor runtime status (capture stats, config, time)."""
+
+        with self._connection:
+            self._connection.execute(
+                """
+                INSERT INTO metadata (key, value)
+                VALUES ('runtime_status', ?)
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value
+                """,
+                (_json(status),),
+            )
+
+    def runtime_status(self) -> dict[str, object] | None:
+        """Return the last persisted sensor runtime status, if any."""
+
+        row = self._connection.execute(
+            "SELECT value FROM metadata WHERE key = 'runtime_status'"
+        ).fetchone()
+        if row is None:
+            return None
+        value = _loads(row["value"])
+        return value if isinstance(value, dict) else None
+
     def upsert_ap_snapshot(self, summary: object, *, observed_at: float | None = None) -> None:
         payload = _payload(summary)
         now = _now(observed_at)

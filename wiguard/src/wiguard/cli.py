@@ -5,76 +5,71 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from dataclasses import replace
 from pathlib import Path
 
-from wiguard.capture import CaptureConfig, WiGuardCaptureEngine
-from wiguard.capture.models import DEFAULT_ALFA_INTERFACE, DEFAULT_INTERNAL_INTERFACE, default_channels
-from wiguard.correlation import CorrelationEngine, events_from_alerts
-from wiguard.detection import (
-    APIdentityVerifier,
-    DeauthStormDetector,
-    DuplicateBSSIDDetector,
-    EnvironmentAnomalyDetector,
-    IdentityBaselineStore,
-)
-from wiguard.features import APFeatureStateManager, FeatureExtractor, ManagementFrameCounter
+from wiguard.capture import WiGuardCaptureEngine
+from wiguard.config import DEFAULT_CONFIG_PATH, load_config
+from wiguard.correlation import events_from_alerts
+from wiguard.detection import IdentityBaselineStore
+from wiguard.features import FeatureExtractor
 from wiguard.state import APStateManager
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Passive WiGuard AP scanner")
-    parser.add_argument("--iface", default=DEFAULT_ALFA_INTERFACE, help="external Alfa capture interface")
-    parser.add_argument("--internal-iface", default=DEFAULT_INTERNAL_INTERFACE, help="internal Wi-Fi interface that must stay connected")
+    pre = argparse.ArgumentParser(add_help=False)
+    pre.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH, help="path to config.yaml")
+    pre_args, _ = pre.parse_known_args(argv)
+    cfg = load_config(pre_args.config)
+
+    parser = argparse.ArgumentParser(
+        parents=[pre],
+        description="Passive WiGuard AP scanner. Detector thresholds come from config.yaml.",
+    )
+    parser.add_argument("--iface", default=cfg.capture.interface, help="external Alfa capture interface")
+    parser.add_argument("--internal-iface", default=cfg.capture.internal_interface, help="internal Wi-Fi interface that must stay connected")
     parser.add_argument("--duration", type=float, default=20.0, help="scan duration in seconds")
-    parser.add_argument("--dwell", type=float, default=0.5, help="seconds to dwell on each channel")
-    parser.add_argument("--monitor-settle", type=float, default=0.25, help="seconds to wait after entering monitor mode")
-    parser.add_argument("--channel-settle", type=float, default=0.05, help="seconds to wait after changing channel")
-    parser.add_argument("--channels", default=None, help="comma-separated channel list; default scans 2.4 GHz and 5 GHz")
+    parser.add_argument("--dwell", type=float, default=cfg.capture.dwell_seconds, help="seconds to dwell on each channel")
+    parser.add_argument("--monitor-settle", type=float, default=cfg.capture.monitor_settle_seconds, help="seconds to wait after entering monitor mode")
+    parser.add_argument("--channel-settle", type=float, default=cfg.capture.channel_settle_seconds, help="seconds to wait after changing channel")
+    parser.add_argument("--channels", default=None, help="comma-separated channel list; default from config")
     parser.add_argument("--max-observations", type=int, default=None, help="stop after this many AP observations")
     parser.add_argument("--json", action="store_true", help="print final AP state as JSON")
     parser.add_argument("--quiet", action="store_true", help="suppress live channel/status output")
     parser.add_argument("--features", action="store_true", help="include feature extraction summaries in JSON output")
-    parser.add_argument("--min-clock-samples", type=int, default=50, help="minimum TSF samples for live clock-skew estimate")
-    parser.add_argument("--identity-baseline", type=Path, default=None, help="trusted AP identity baseline JSON path")
+    parser.add_argument("--min-clock-samples", type=int, default=cfg.features.clock_skew_min_samples, help="minimum TSF samples for live clock-skew estimate (overrides config)")
+    parser.add_argument("--identity-baseline", type=Path, default=None, help="trusted AP identity baseline JSON path; identity checks run only when set")
     parser.add_argument("--identity-learn", action="store_true", help="learn or refresh trusted identity baselines from this scan")
-    parser.add_argument("--identity-min-baseline-frames", type=int, default=50, help="minimum frames required to learn an identity baseline")
-    parser.add_argument("--identity-clock-skew-delta-ppm", type=float, default=5.0, help="clock-skew delta threshold for identity alerts")
-    parser.add_argument("--identity-rssi-shift-db", type=float, default=12.0, help="RSSI shift threshold for identity alerts")
-    parser.add_argument("--duplicate-min-samples", type=int, default=30, help="minimum same-BSSID TSF samples for duplicate detection")
-    parser.add_argument("--duplicate-min-cluster-samples", type=int, default=8, help="minimum samples in each residual cluster")
-    parser.add_argument("--duplicate-residual-gap-us", type=float, default=10_000.0, help="minimum TSF residual gap for duplicate-BSSID detection")
     args = parser.parse_args(argv)
     if args.identity_learn and args.identity_baseline is None:
         parser.error("--identity-learn requires --identity-baseline")
 
-    channels = _parse_channels(args.channels) if args.channels else default_channels()
-    config = CaptureConfig(
+    cfg = replace(
+        cfg,
+        features=replace(cfg.features, clock_skew_min_samples=args.min_clock_samples),
+    )
+
+    channels = _parse_channels(args.channels) if args.channels else None
+    config = cfg.capture_config(
         interface=args.iface,
         internal_interface=args.internal_iface,
         channels=channels,
         dwell_seconds=args.dwell,
+    )
+    config = replace(
+        config,
         monitor_settle_seconds=args.monitor_settle,
         channel_settle_seconds=args.channel_settle,
     )
-    manager = APStateManager()
+    manager = APStateManager(window_size=cfg.state.rolling_window_size)
     engine = WiGuardCaptureEngine(config, state_manager=manager)
     feature_extractor = FeatureExtractor() if args.features else None
-    feature_state = APFeatureStateManager(min_clock_samples=args.min_clock_samples) if args.features else None
-    management_counter = ManagementFrameCounter() if args.features else None
-    deauth_detector = DeauthStormDetector() if args.features else None
-    environment_detector = EnvironmentAnomalyDetector() if args.features else None
-    correlation_engine = CorrelationEngine() if args.features else None
-    duplicate_detector = (
-        DuplicateBSSIDDetector(
-            min_samples=args.duplicate_min_samples,
-            min_cluster_samples=args.duplicate_min_cluster_samples,
-            residual_gap_threshold_us=args.duplicate_residual_gap_us,
-            clock_skew_delta_ppm=args.identity_clock_skew_delta_ppm,
-            rssi_delta_db=args.identity_rssi_shift_db,
-        )
-        if args.features
-        else None
-    )
+    feature_state = cfg.build_feature_state() if args.features else None
+    management_counter = cfg.build_management_counter() if args.features else None
+    deauth_detector = cfg.build_deauth_detector() if args.features else None
+    environment_detector = cfg.build_environment_detector() if args.features else None
+    correlation_engine = cfg.build_correlation_engine() if args.features else None
+    duplicate_detector = cfg.build_duplicate_detector() if args.features else None
     identity_store = (
         IdentityBaselineStore(args.identity_baseline)
         if args.features and args.identity_baseline is not None
@@ -82,13 +77,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     identity_baselines = identity_store.load() if identity_store is not None else ()
     identity_verifier = (
-        APIdentityVerifier(
-            min_baseline_frames=args.identity_min_baseline_frames,
-            clock_skew_delta_ppm=args.identity_clock_skew_delta_ppm,
-            rssi_shift_db=args.identity_rssi_shift_db,
-            baselines=identity_baselines,
-            auto_baseline=False,
-        )
+        cfg.build_identity_verifier(identity_baselines, auto_baseline=False)
         if args.features and identity_store is not None
         else None
     )
@@ -158,7 +147,7 @@ def main(argv: list[str] | None = None) -> int:
             if identity_verifier is not None:
                 if args.identity_learn:
                     for summary in feature_summaries:
-                        if summary.frames >= args.identity_min_baseline_frames:
+                        if summary.frames >= cfg.detection.identity.min_baseline_frames:
                             identity_verifier.force_baseline(summary)
                 else:
                     identity_alerts = [

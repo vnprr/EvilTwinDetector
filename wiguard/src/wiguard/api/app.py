@@ -9,6 +9,7 @@ from typing import Annotated
 from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
+from wiguard.config import WiGuardConfig
 from wiguard.runtime.store import DEFAULT_STATE_PATH, RuntimeStore
 
 
@@ -20,11 +21,17 @@ def create_app(
     *,
     state_path: Path | str = DEFAULT_STATE_PATH,
     cors_origins: tuple[str, ...] = DEFAULT_CORS_ORIGINS,
+    config: WiGuardConfig | None = None,
 ) -> FastAPI:
     """Create the WiGuard read API.
 
     The API opens short-lived SQLite connections per request, so it can run
     alongside `wiguard-sensor` without holding long read transactions.
+
+    ``config`` is the effective :class:`WiGuardConfig`; it is exposed read-only
+    at ``/api/config`` so the operator can see the thresholds the sensor runs
+    with. It defaults to built-in defaults (not a disk read) for deterministic
+    tests.
     """
 
     app = FastAPI(
@@ -34,6 +41,7 @@ def create_app(
     )
     app.state.state_path = Path(state_path)
     app.state.cors_origins = tuple(cors_origins)
+    app.state.config = config or WiGuardConfig()
     if cors_origins:
         app.add_middleware(
             CORSMiddleware,
@@ -60,6 +68,10 @@ def create_app(
                 "state_path": str(app.state.state_path),
                 **store.stats(),
             }
+
+    @app.get("/api/config")
+    def config() -> dict[str, object]:
+        return app.state.config.to_public_dict()
 
     @app.get("/api/aps")
     def aps() -> dict[str, object]:
