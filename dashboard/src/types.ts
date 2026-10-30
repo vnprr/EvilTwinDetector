@@ -89,6 +89,62 @@ export type TimelineEvent = {
   payload: Record<string, unknown>;
 };
 
+export type SensorStatus = {
+  state: "online" | "stale" | "unknown";
+  detail?: string;
+  last_update: number | null;
+  stale_seconds: number | null;
+  stale_threshold_seconds?: number;
+  runtime_status: {
+    observed_at?: number;
+    interface?: string;
+    internal_interface?: string;
+    channels?: number[];
+    flush_interval_seconds?: number;
+    ap_snapshots?: number;
+    config_source?: string | null;
+    capture?: Record<string, unknown>;
+  } | null;
+};
+
+export type BaselineItem = {
+  bssid: string;
+  ssid: string;
+  frames: number;
+  dominant_ie_fingerprint: string | null;
+  avg_rssi_dbm: number | null;
+  rssi_stddev: number | null;
+  clock_skew_ppm: number | null;
+  sequence_reset_count: number;
+};
+
+export type BaselinePayload = {
+  baseline_path: string;
+  auto_learn: boolean;
+  enrolled: number;
+  baselines: BaselineItem[];
+  metadata?: Record<string, unknown>;
+  detail?: string;
+  error?: string;
+};
+
+export type EffectiveConfig = {
+  source_path: string | null;
+  capture: Record<string, unknown>;
+  runtime: Record<string, number | string>;
+  features: Record<string, number>;
+  safety: Record<string, unknown>;
+  detection: {
+    identity: Record<string, unknown>;
+    deauth_storm: Record<string, number>;
+    environment_anomaly: Record<string, number>;
+    correlation: {
+      min_final_score: number;
+      module_weights: Record<string, number>;
+    };
+  };
+};
+
 export type DetectionEventRow = {
   event_id: number;
   observed_at: number;

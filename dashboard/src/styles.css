@@ -564,3 +564,61 @@ select {
     width: auto;
   }
 }
+
+/* --- System view, exports, score legend, non-error notices --- */
+
+.notice.warning {
+  border-color: #e4c15e;
+  background: var(--amber-bg);
+  color: var(--amber);
+}
+
+.notice.info {
+  border-color: #a9cbe6;
+  background: var(--blue-bg);
+  color: var(--blue);
+}
+
+.panel-heading-actions {
+  align-items: flex-start;
+}
+
+.panel-sub {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.muted.small {
+  font-size: 0.78rem;
+}
+
+.export-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.export-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 0.8rem;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.export-button:hover {
+  border-color: #a7ada1;
+  background: var(--surface-strong);
+}
+
+h3 svg {
+  vertical-align: -2px;
+  margin-right: 5px;
+  color: var(--muted);
+}

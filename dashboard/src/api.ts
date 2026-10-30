@@ -1,10 +1,13 @@
 import type {
   APDetail,
   APListItem,
+  BaselinePayload,
   CorrelatedAlert,
   DetectionEventRow,
+  EffectiveConfig,
   HealthPayload,
   RuntimeStats,
+  SensorStatus,
   TimelineEvent,
 } from "./types";
 
@@ -37,7 +40,14 @@ export const api = {
     const suffix = afterId && afterId > 0 ? `?after_id=${afterId}&limit=100` : "?limit=100";
     return (await request<{ count: number; items: TimelineEvent[] }>(`/api/timeline${suffix}`)).items;
   },
+  config: () => request<EffectiveConfig>("/api/config"),
+  sensor: () => request<SensorStatus>("/api/sensor"),
+  baseline: () => request<BaselinePayload>("/api/baseline"),
 };
+
+export function exportUrl(name: "alerts" | "aps" | "events"): string {
+  return `${API_BASE}/api/export/${name}.csv`;
+}
 
 export function liveWebSocketUrl(afterId = 0): string {
   const url = new URL(API_BASE);

@@ -2,10 +2,14 @@ import {
   Activity,
   AlertTriangle,
   Database,
+  Download,
   Info,
+  KeyRound,
   LayoutDashboard,
   Radio,
   RefreshCw,
+  Server,
+  Settings,
   ShieldAlert,
   ShieldCheck,
   Signal,
@@ -22,18 +26,23 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { api, apiBase, liveWebSocketUrl } from "./api";
+import { api, apiBase, exportUrl, liveWebSocketUrl } from "./api";
 import type {
   APDetail,
   APListItem,
+  BaselinePayload,
   Classification,
   CorrelatedAlert,
+  EffectiveConfig,
   HealthPayload,
   RuntimeStats,
+  SensorStatus,
   TimelineEvent,
 } from "./types";
 
-type View = "overview" | "alerts" | "ap-detail" | "activity";
+type View = "overview" | "alerts" | "ap-detail" | "activity" | "system";
+
+const SCORE_HINT = "Heuristic evidence score (0–100) from weighted module signals — not a calibrated probability.";
 
 const statusRank: Record<Classification, number> = {
   clean: 0,
@@ -63,6 +72,9 @@ export function App() {
   const [alertTimeline, setAlertTimeline] = useState<TimelineEvent[]>([]);
   const [classificationFilter, setClassificationFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [sensorStatus, setSensorStatus] = useState<SensorStatus | null>(null);
+  const [baseline, setBaseline] = useState<BaselinePayload | null>(null);
+  const [effConfig, setEffConfig] = useState<EffectiveConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [liveState, setLiveState] = useState<"connecting" | "live" | "fallback">("connecting");
@@ -92,6 +104,15 @@ export function App() {
     } finally {
       setLoading(false);
     }
+    // System panels are best-effort: a failure here must not blank the dashboard.
+    const [nextSensor, nextBaseline, nextConfig] = await Promise.all([
+      api.sensor().catch(() => null),
+      api.baseline().catch(() => null),
+      api.config().catch(() => null),
+    ]);
+    if (nextSensor) setSensorStatus(nextSensor);
+    if (nextBaseline) setBaseline(nextBaseline);
+    if (nextConfig) setEffConfig(nextConfig);
   }, [classificationFilter, statusFilter]);
 
   useEffect(() => {
@@ -219,6 +240,7 @@ export function App() {
           <NavButton active={view === "alerts"} icon={<ShieldAlert size={18} />} label="Alerts" onClick={() => setView("alerts")} />
           <NavButton active={view === "ap-detail"} icon={<Wifi size={18} />} label="AP Detail" onClick={() => setView("ap-detail")} />
           <NavButton active={view === "activity"} icon={<Activity size={18} />} label="Activity" onClick={() => setView("activity")} />
+          <NavButton active={view === "system"} icon={<Settings size={18} />} label="System" onClick={() => setView("system")} />
         </nav>
         <div className="runtime-box">
           <span>API</span>
@@ -243,6 +265,17 @@ export function App() {
           <div className="notice error">
             <AlertTriangle size={18} />
             <span>{error}</span>
+          </div>
+        )}
+
+        {!error && sensorStatus && sensorStatus.state !== "online" && (
+          <div className={`notice ${sensorStatus.state === "stale" ? "warning" : "info"}`}>
+            <Info size={18} />
+            <span>
+              {sensorStatus.state === "stale"
+                ? `Sensor feed looks stale — last update ${formatAge(sensorStatus.stale_seconds)} ago.`
+                : sensorStatus.detail ?? "No live sensor status; this may be an offline replay database."}
+            </span>
           </div>
         )}
 
@@ -287,6 +320,9 @@ export function App() {
               <APDetailView aps={aps} selectedAp={selectedAp} detail={apDetail} onSelect={setSelectedBssid} />
             )}
             {view === "activity" && <ActivityView timeline={timeline} />}
+            {view === "system" && (
+              <SystemView sensor={sensorStatus} baseline={baseline} config={effConfig} />
+            )}
           </>
         )}
       </section>
@@ -347,7 +383,7 @@ function Overview({ aps, onSelect }: { aps: APListItem[]; onSelect: (bssid: stri
                 <td>{ap.channels.join(", ") || "-"}</td>
                 <td>{formatDbm(ap.avg_rssi_dbm ?? ap.last_rssi_dbm)}</td>
                 <td>{ap.total_frames}</td>
-                <td>{ap.last_alert ? `${statusCopy[ap.last_alert.classification]} · ${score(ap.last_alert.final_score)}` : "None"}</td>
+                <td title={ap.last_alert ? SCORE_HINT : undefined}>{ap.last_alert ? `${statusCopy[ap.last_alert.classification]} · ${score(ap.last_alert.final_score)}` : "None"}</td>
               </tr>
             ))}
           </tbody>
@@ -371,10 +407,15 @@ function AlertsView(props: {
   return (
     <section className="split">
       <div className="panel">
-        <div className="panel-heading">
+        <div className="panel-heading panel-heading-actions">
           <div>
             <h2>Correlated alerts</h2>
+            <p className="panel-sub" title={SCORE_HINT}>Score is heuristic evidence (0–100), not a probability.</p>
           </div>
+          <a className="export-button" href={exportUrl("alerts")} title="Download all correlated alerts as CSV">
+            <Download size={15} />
+            <span>CSV</span>
+          </a>
         </div>
         <div className="filters">
           <select value={props.classificationFilter} onChange={(event) => props.onClassification(event.target.value)}>
@@ -397,7 +438,7 @@ function AlertsView(props: {
                 <code>{alert.bssid}</code>
                 <span>{alert.contributing_modules.join(" + ")}</span>
               </div>
-              <b>{score(alert.final_score)}</b>
+              <b title={SCORE_HINT}>{score(alert.final_score)}</b>
             </button>
           ))}
         </div>
@@ -491,6 +532,147 @@ function ActivityView({ timeline }: { timeline: TimelineEvent[] }) {
   );
 }
 
+function SystemView({
+  sensor,
+  baseline,
+  config,
+}: {
+  sensor: SensorStatus | null;
+  baseline: BaselinePayload | null;
+  config: EffectiveConfig | null;
+}) {
+  return (
+    <section className="split">
+      <div className="panel">
+        <div className="panel-heading">
+          <div>
+            <h2>Sensor health</h2>
+          </div>
+          <Server size={20} />
+        </div>
+        {sensor ? (
+          <SensorHealth sensor={sensor} />
+        ) : (
+          <div className="empty-state">No sensor status available.</div>
+        )}
+        <h3><KeyRound size={15} /> Trusted baseline</h3>
+        {baseline ? (
+          <BaselinePanel baseline={baseline} />
+        ) : (
+          <div className="empty-state">Baseline status unavailable.</div>
+        )}
+      </div>
+      <div className="panel detail-panel">
+        <div className="panel-heading panel-heading-actions">
+          <div>
+            <h2>Effective configuration</h2>
+            <p className="panel-sub">
+              Live values the detectors run with
+              {config?.source_path ? ` · ${config.source_path}` : " · built-in defaults"}.
+            </p>
+          </div>
+          <div className="export-row">
+            <a className="export-button" href={exportUrl("alerts")} title="Download alerts as CSV"><Download size={15} /><span>alerts</span></a>
+            <a className="export-button" href={exportUrl("aps")} title="Download APs as CSV"><Download size={15} /><span>APs</span></a>
+            <a className="export-button" href={exportUrl("events")} title="Download raw events as CSV"><Download size={15} /><span>events</span></a>
+          </div>
+        </div>
+        {config ? (
+          <ConfigPanel config={config} />
+        ) : (
+          <div className="empty-state">Configuration unavailable.</div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function SensorHealth({ sensor }: { sensor: SensorStatus }) {
+  const rs = sensor.runtime_status;
+  const pill: Classification =
+    sensor.state === "online" ? "clean" : sensor.state === "stale" ? "suspicious" : "info";
+  return (
+    <>
+      <div className="detail-head">
+        <StatusPill status={pill} label={sensor.state} />
+        {sensor.last_update && <span className="muted">updated {formatAge(sensor.stale_seconds)} ago</span>}
+      </div>
+      {sensor.detail && <p className="explanation">{sensor.detail}</p>}
+      <div className="facts-grid">
+        <Fact label="Capture iface" value={rs?.interface ?? "-"} />
+        <Fact label="Protected iface" value={rs?.internal_interface ?? "-"} />
+        <Fact label="Channels" value={rs?.channels?.length ? String(rs.channels.length) : "-"} />
+        <Fact label="Flush (s)" value={rs?.flush_interval_seconds != null ? String(rs.flush_interval_seconds) : "-"} />
+        <Fact label="APs (last flush)" value={rs?.ap_snapshots != null ? String(rs.ap_snapshots) : "-"} />
+        <Fact label="Config source" value={rs?.config_source ?? "defaults"} />
+      </div>
+    </>
+  );
+}
+
+function BaselinePanel({ baseline }: { baseline: BaselinePayload }) {
+  return (
+    <>
+      <div className="facts-grid">
+        <Fact label="Enrolled APs" value={String(baseline.enrolled)} />
+        <Fact label="Auto-learn" value={baseline.auto_learn ? "on" : "off"} />
+      </div>
+      <p className="muted small"><code>{baseline.baseline_path}</code></p>
+      {baseline.error && <p className="explanation">Could not read baseline: {baseline.error}</p>}
+      {baseline.baselines.length > 0 ? (
+        <div className="mini-list">
+          {baseline.baselines.map((item) => (
+            <div key={item.bssid} className="mini-row">
+              <code>{item.bssid}</code>
+              <span>
+                {item.ssid || "<hidden>"} · {item.frames} frames
+                {item.clock_skew_ppm != null ? ` · ${item.clock_skew_ppm.toFixed(1)} ppm` : ""}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="muted">
+          No trusted baseline enrolled. Learn one from a known-good capture with{" "}
+          <code>wiguard-scan --identity-baseline … --identity-learn</code>.
+        </p>
+      )}
+    </>
+  );
+}
+
+function ConfigPanel({ config }: { config: EffectiveConfig }) {
+  const correlation = config.detection.correlation;
+  return (
+    <>
+      <h3>Correlation</h3>
+      <div className="facts-grid">
+        <Fact label="min_final_score" value={String(correlation.min_final_score)} />
+        <Fact label="suspicious ≥" value="0.45 (fixed)" />
+        <Fact label="evil_twin ≥" value="0.80 (fixed)" />
+      </div>
+      <h3>Module weights</h3>
+      <div className="facts-grid">
+        {Object.entries(correlation.module_weights).map(([key, value]) => (
+          <Fact key={key} label={key} value={String(value)} />
+        ))}
+      </div>
+      <h3>Deauth-storm thresholds</h3>
+      <div className="facts-grid">
+        {Object.entries(config.detection.deauth_storm).map(([key, value]) => (
+          <Fact key={key} label={key} value={String(value)} />
+        ))}
+      </div>
+      <h3>Environment-anomaly thresholds</h3>
+      <div className="facts-grid">
+        {Object.entries(config.detection.environment_anomaly).map(([key, value]) => (
+          <Fact key={key} label={key} value={String(value)} />
+        ))}
+      </div>
+    </>
+  );
+}
+
 function TimelineList({ items }: { items: TimelineEvent[] }) {
   if (!items.length) return <div className="empty-state">No timeline events yet.</div>;
   return (
@@ -529,7 +711,16 @@ function apSort(a: APListItem, b: APListItem): number {
 }
 
 function score(value: number): string {
-  return `${Math.round(value * 100)}%`;
+  // Rendered as "N/100", never "%": the correlation score is a heuristic
+  // evidence weight, not a calibrated probability (see SCORE_HINT).
+  return `${Math.round(value * 100)}/100`;
+}
+
+function formatAge(seconds: number | null | undefined): string {
+  if (seconds === null || seconds === undefined) return "unknown";
+  if (seconds < 90) return `${Math.round(seconds)}s`;
+  if (seconds < 5400) return `${Math.round(seconds / 60)}m`;
+  return `${Math.round(seconds / 3600)}h`;
 }
 
 function formatDbm(value: number | null | undefined): string {
