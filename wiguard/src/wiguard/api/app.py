@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+import csv
+import io
+import time
 from pathlib import Path
 from typing import Annotated
 
 from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 
 from wiguard.config import WiGuardConfig
 from wiguard.runtime.store import DEFAULT_STATE_PATH, RuntimeStore
@@ -72,6 +76,118 @@ def create_app(
     @app.get("/api/config")
     def config() -> dict[str, object]:
         return app.state.config.to_public_dict()
+
+    @app.get("/api/sensor")
+    def sensor() -> dict[str, object]:
+        with _store(app) as store:
+            status = store.runtime_status()
+        now = time.time()
+        observed_at = None
+        flush_interval = app.state.config.runtime.flush_interval_seconds
+        if status is not None:
+            observed_at = _as_float(status.get("observed_at"))
+            flush_interval = _as_float(status.get("flush_interval_seconds")) or flush_interval
+        if observed_at is None:
+            return {
+                "state": "unknown",
+                "detail": "No sensor runtime status recorded yet. "
+                "This state database may come from offline pcap replay rather than a live sensor.",
+                "runtime_status": status,
+                "last_update": None,
+                "stale_seconds": None,
+            }
+        stale_seconds = max(0.0, now - observed_at)
+        stale_threshold = max(15.0, flush_interval * 3.0)
+        return {
+            "state": "stale" if stale_seconds > stale_threshold else "online",
+            "runtime_status": status,
+            "last_update": observed_at,
+            "stale_seconds": stale_seconds,
+            "stale_threshold_seconds": stale_threshold,
+        }
+
+    @app.get("/api/baseline")
+    def baseline() -> dict[str, object]:
+        identity = app.state.config.detection.identity
+        payload: dict[str, object] = {
+            "baseline_path": identity.baseline_path,
+            "auto_learn": identity.auto_learn,
+        }
+        store = app.state.config.identity_baseline_store()
+        if store is None:
+            payload.update({"enrolled": 0, "baselines": [], "detail": "No baseline path configured."})
+            return payload
+        try:
+            baselines = store.load()
+        except (OSError, ValueError) as exc:
+            payload.update({"enrolled": 0, "baselines": [], "error": str(exc)})
+            return payload
+        payload.update(
+            {
+                "enrolled": len(baselines),
+                "metadata": store.metadata.to_dict(),
+                "baselines": [item.to_dict() for item in baselines],
+            }
+        )
+        return payload
+
+    @app.get("/api/export/alerts.csv")
+    def export_alerts() -> Response:
+        with _store(app) as store:
+            alerts = store.correlated_alerts()
+        header = [
+            "alert_key", "bssid", "ssid", "classification", "final_score", "count",
+            "first_seen", "last_seen", "status", "contributing_modules", "signal_names", "explanation",
+        ]
+        rows = [
+            [
+                alert.get("alert_key"), alert.get("bssid"), alert.get("ssid"),
+                alert.get("classification"), alert.get("final_score"), alert.get("count"),
+                alert.get("first_seen"), alert.get("last_seen"), alert.get("status"),
+                "|".join(alert.get("contributing_modules", []) or []),
+                "|".join(alert.get("signal_names", []) or []),
+                alert.get("explanation"),
+            ]
+            for alert in alerts
+        ]
+        return _csv_response(header, rows, "wiguard-alerts.csv")
+
+    @app.get("/api/export/aps.csv")
+    def export_aps() -> Response:
+        with _store(app) as store:
+            snapshots = store.ap_snapshots()
+        header = [
+            "bssid", "ssid", "channels", "total_frames", "snapshot_count",
+            "last_rssi_dbm", "avg_rssi_dbm", "rssi_stddev", "clock_skew_ppm",
+            "dominant_ie_fingerprint", "first_seen", "last_seen",
+        ]
+        rows = [
+            [
+                snap.get("bssid"), snap.get("ssid"),
+                "|".join(str(channel) for channel in snap.get("channels", []) or []),
+                snap.get("total_frames"), snap.get("snapshot_count"),
+                snap.get("last_rssi_dbm"), snap.get("avg_rssi_dbm"), snap.get("rssi_stddev"),
+                snap.get("clock_skew_ppm"), snap.get("dominant_ie_fingerprint"),
+                snap.get("first_seen"), snap.get("last_seen"),
+            ]
+            for snap in snapshots
+        ]
+        return _csv_response(header, rows, "wiguard-aps.csv")
+
+    @app.get("/api/export/events.csv")
+    def export_events() -> Response:
+        with _store(app) as store:
+            events = store.detection_events(descending=True)
+        header = ["event_id", "observed_at", "module", "bssid", "ssid", "score", "signal_names"]
+        rows = [
+            [
+                event.get("event_id"), event.get("observed_at"), event.get("module"),
+                event.get("bssid"), event.get("ssid"), event.get("score"),
+                "|".join(event.get("signal_names", []) or []),
+            ]
+            for event in events
+        ]
+        return _csv_response(header, rows, "wiguard-events.csv")
 
     @app.get("/api/aps")
     def aps() -> dict[str, object]:
@@ -212,6 +328,25 @@ def create_app(
 
 def _store(app: FastAPI) -> RuntimeStore:
     return RuntimeStore(app.state.state_path)
+
+
+def _csv_response(header: list[str], rows: list[list[object]], filename: str) -> Response:
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(header)
+    for row in rows:
+        writer.writerow(["" if value is None else value for value in row])
+    return Response(
+        content=buffer.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+def _as_float(value: object) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return float(value)
 
 
 def _ap_summary(
