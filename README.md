@@ -24,6 +24,17 @@ The goal is a defensible engineering thesis: rigorously tested passive detection
 
 The hardware validation report lives in `docs/hardware/alfa-rtl8812au.md`.
 
+## Configuration
+
+`config.yaml` is the single source of truth for detector thresholds and
+runtime settings. It is loaded and validated by `wiguard.config.load_config`:
+unknown keys and out-of-range values are rejected on load, and the values are
+used to build every detector, so editing a threshold here changes behaviour.
+
+Precedence is **CLI flag → `config.yaml` → built-in default**. Point any tool
+at a different file with `--config path/to/config.yaml`. Each CLI still exposes
+run-level flags (interface, duration, state path, …) that override the file.
+
 ## Run A Passive Scan
 
 ```bash
@@ -116,6 +127,9 @@ The sensor is still passive. It uses the Alfa adapter for monitor-mode capture, 
 Useful endpoints:
 
 - `GET /api/health`
+- `GET /api/config` — the effective, resolved configuration
+- `GET /api/sensor` — sensor runtime status with computed staleness
+- `GET /api/baseline` — trusted identity baselines and enrollment metadata
 - `GET /api/aps`
 - `GET /api/aps/{bssid}`
 - `GET /api/aps/{bssid}/timeline`
@@ -124,6 +138,7 @@ Useful endpoints:
 - `GET /api/events`
 - `GET /api/timeline`
 - `GET /api/stats`
+- `GET /api/export/alerts.csv`, `GET /api/export/aps.csv`, `GET /api/export/events.csv`
 - `WS /ws/live`
 
 The API does not start active verification, change thresholds, or touch Wi-Fi interfaces. It only reads persisted runtime state and initializes an empty schema if the database does not exist yet.
@@ -145,7 +160,7 @@ The frontend reads `VITE_WIGUARD_API_BASE`, defaulting to `http://127.0.0.1:8765
 .venv/bin/wiguard-api --state-path /tmp/wiguard_dashboard_demo.db --host 127.0.0.1 --port 8765
 ```
 
-Then open the Vite URL from `npm run dev`. The first screen is the operator dashboard: AP overview, alert inspection, AP detail, and live activity timeline.
+Then open the Vite URL from `npm run dev`. The first screen is the operator dashboard: AP overview, alert inspection, AP detail, live activity timeline, and a System view (sensor health, trusted-baseline status, the effective configuration, and CSV export). The dashboard stays read-only.
 
 ## Analyze A PCAP
 
