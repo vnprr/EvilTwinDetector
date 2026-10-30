@@ -113,6 +113,7 @@ class WiGuardSensor:
         feature_summaries = self.feature_state.summaries()
         for summary in feature_summaries:
             store.upsert_ap_snapshot(summary, observed_at=observed_at)
+            store.insert_ap_metric_sample(summary, observed_at=observed_at)
 
         duplicate_alerts = self.duplicate_detector.alerts()
         environment_alerts = self.environment_detector.analyze(feature_summaries)

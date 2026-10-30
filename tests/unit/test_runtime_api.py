@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 from wiguard.api import create_app
 from wiguard.analysis import analyze_pcap
 from wiguard.runtime import RuntimeStore
+from wiguard.runtime.store import SCHEMA_VERSION
 
 
 FIXTURE_DIR = Path("tests/pcap_fixtures/synthetic")
@@ -25,7 +26,7 @@ class RuntimeAPITest(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["status"], "ok")
-        self.assertEqual(payload["schema_version"], 1)
+        self.assertEqual(payload["schema_version"], SCHEMA_VERSION)
         self.assertEqual(payload["ap_count"], 0)
         self.assertEqual(payload["alert_count"], 0)
 

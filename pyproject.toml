@@ -21,6 +21,7 @@ wiguard-analyze-pcap = "wiguard.pcap_analyzer:main"
 wiguard-api = "wiguard.api.server:main"
 wiguard-evaluate-fixtures = "wiguard.evaluation.runner:main"
 wiguard-generate-fixtures = "wiguard.evaluation.synthetic:main"
+wiguard-replay = "wiguard.replay:main"
 wiguard-scan = "wiguard.cli:main"
 wiguard-sensor = "wiguard.runtime.sensor:main"
 

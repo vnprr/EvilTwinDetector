@@ -6,6 +6,7 @@ from pathlib import Path
 
 from wiguard.correlation import CorrelatedAlert, DetectionEvent
 from wiguard.runtime import RuntimeStore
+from wiguard.runtime.store import SCHEMA_VERSION
 
 
 def detection_event() -> DetectionEvent:
@@ -41,7 +42,7 @@ class RuntimeStoreTest(unittest.TestCase):
                 store.initialize_schema()
                 store.initialize_schema()
 
-                self.assertEqual(store.schema_version(), 1)
+                self.assertEqual(store.schema_version(), SCHEMA_VERSION)
                 self.assertEqual(store.ap_snapshots(), [])
                 self.assertEqual(store.detection_events(), [])
                 self.assertEqual(store.correlated_alerts(), [])

@@ -12,7 +12,7 @@ from pathlib import Path
 from wiguard.correlation import CorrelatedAlert, DetectionEvent
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 DEFAULT_STATE_PATH = Path(".wiguard/wiguard.db")
 
 
@@ -137,13 +137,30 @@ class RuntimeStore:
 
                 CREATE INDEX IF NOT EXISTS idx_timeline_events_time
                     ON timeline_events (observed_at);
+
+                CREATE TABLE IF NOT EXISTS ap_metric_samples (
+                    sample_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    bssid TEXT NOT NULL,
+                    observed_at REAL NOT NULL,
+                    last_rssi_dbm INTEGER,
+                    avg_rssi_dbm REAL,
+                    rssi_stddev REAL,
+                    clock_skew_ppm REAL,
+                    total_frames INTEGER
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_ap_metric_samples_bssid_time
+                    ON ap_metric_samples (bssid, observed_at);
                 """
             )
+            # Additive-only migrations: tables above use CREATE IF NOT EXISTS,
+            # so existing databases gain new tables on open. Keep the recorded
+            # schema version in step with the code.
             self._connection.execute(
                 """
                 INSERT INTO metadata (key, value)
                 VALUES ('schema_version', ?)
-                ON CONFLICT(key) DO NOTHING
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value
                 """,
                 (str(SCHEMA_VERSION),),
             )
@@ -244,6 +261,61 @@ class RuntimeStore:
                     now,
                 ),
             )
+
+    def insert_ap_metric_sample(
+        self,
+        summary: object,
+        *,
+        observed_at: float | None = None,
+    ) -> None:
+        """Append one time-stamped RSSI/clock-skew sample for an AP.
+
+        Unlike ``ap_snapshots`` (one latest row per BSSID), these rows accumulate
+        so the dashboard and experiments can plot per-AP trends over time.
+        """
+
+        payload = _payload(summary)
+        now = _now(observed_at)
+        bssid = str(payload["bssid"]).lower()
+        with self._connection:
+            self._connection.execute(
+                """
+                INSERT INTO ap_metric_samples (
+                    bssid, observed_at, last_rssi_dbm, avg_rssi_dbm,
+                    rssi_stddev, clock_skew_ppm, total_frames
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    bssid,
+                    now,
+                    _optional_int(payload.get("last_rssi_dbm")),
+                    _optional_float(payload.get("avg_rssi_dbm")),
+                    _optional_float(payload.get("rssi_stddev")),
+                    _clock_skew_ppm(payload),
+                    _optional_int(payload.get("frames")),
+                ),
+            )
+
+    def ap_metric_samples(
+        self,
+        bssid: str,
+        *,
+        limit: int | None = None,
+    ) -> list[dict[str, object]]:
+        """Return per-AP metric samples in chronological (oldest-first) order."""
+
+        query = (
+            "SELECT bssid, observed_at, last_rssi_dbm, avg_rssi_dbm, "
+            "rssi_stddev, clock_skew_ppm, total_frames "
+            "FROM ap_metric_samples WHERE bssid = ? ORDER BY observed_at DESC"
+        )
+        params: list[object] = [bssid.lower()]
+        if limit is not None:
+            query += " LIMIT ?"
+            params.append(max(1, limit))
+        rows = self._connection.execute(query, params).fetchall()
+        return [dict(row) for row in reversed(rows)]
 
     def insert_detection_event(
         self,
@@ -417,6 +489,7 @@ class RuntimeStore:
             payload.get("access_points")
         ):
             self.upsert_ap_snapshot(summary, observed_at=now)
+            self.insert_ap_metric_sample(summary, observed_at=now)
 
         seen_raw_alerts: set[str] = set()
         for alert in _raw_alerts(payload):

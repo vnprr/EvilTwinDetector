@@ -83,23 +83,36 @@ def create_app(
             status = store.runtime_status()
         now = time.time()
         observed_at = None
+        mode = None
         flush_interval = app.state.config.runtime.flush_interval_seconds
         if status is not None:
             observed_at = _as_float(status.get("observed_at"))
+            mode = status.get("mode")
             flush_interval = _as_float(status.get("flush_interval_seconds")) or flush_interval
         if observed_at is None:
             return {
                 "state": "unknown",
+                "mode": mode,
                 "detail": "No sensor runtime status recorded yet. "
                 "This state database may come from offline pcap replay rather than a live sensor.",
                 "runtime_status": status,
                 "last_update": None,
                 "stale_seconds": None,
             }
+        # A replay database is a point-in-time import; staleness is not meaningful.
+        if mode == "replay":
+            return {
+                "state": "replay",
+                "mode": mode,
+                "runtime_status": status,
+                "last_update": observed_at,
+                "stale_seconds": max(0.0, now - observed_at),
+            }
         stale_seconds = max(0.0, now - observed_at)
         stale_threshold = max(15.0, flush_interval * 3.0)
         return {
             "state": "stale" if stale_seconds > stale_threshold else "online",
+            "mode": mode or "live",
             "runtime_status": status,
             "last_update": observed_at,
             "stale_seconds": stale_seconds,
@@ -230,6 +243,19 @@ def create_app(
                 "count": len(events),
                 "items": events,
             }
+
+    @app.get("/api/aps/{bssid}/metrics")
+    def ap_metrics(
+        bssid: str,
+        limit: Annotated[int, Query(ge=1, le=5000)] = 500,
+    ) -> dict[str, object]:
+        with _store(app) as store:
+            samples = store.ap_metric_samples(bssid, limit=limit)
+        return {
+            "bssid": bssid.lower(),
+            "count": len(samples),
+            "items": samples,
+        }
 
     @app.get("/api/alerts")
     def alerts(
