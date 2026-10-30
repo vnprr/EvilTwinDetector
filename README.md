@@ -148,6 +148,13 @@ Synthetic scenarios validate detector logic, not radio-frequency reality; the
 experimental evaluation on real hardware is planned in
 [docs/THESIS-PLAN.md](docs/THESIS-PLAN.md).
 
+`experiments/hopping_simulation.py` filters a long synthetic scenario by the
+sensor's hop schedule and replays it, to show how channel hopping delays
+detection. With the default 38 channels the sensor listens on one channel for
+0.5 s of every ~21 s, so a deauthentication burst never reaches the rate
+thresholds (frames per second over a 10 s window); listening on the protected
+networks' channels only (`--channels 1,6,11`) avoids that.
+
 ## Project documents
 
 - [Architecture and detection logic](docs/ARCHITECTURE.md)
