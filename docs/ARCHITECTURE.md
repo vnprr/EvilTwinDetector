@@ -28,11 +28,11 @@ pakiet ─► parse_frame ─► BeaconFrame ─┬─► APTracker (profil AP) 
 |---|---|---|
 | Przechwytywanie | `capture/adapter.py`, `capture/engine.py` | tryb monitor, skakanie po kanałach, przywrócenie karty, kontrola, że Wi-Fi hosta nadal działa |
 | Cechy | `features/*` | jeden parser ramek, fingerprint IE, zegar (TSF), sekwencje, interwał beaconów, liczniki deauth |
-| Detekcja | `detection/*` | sygnały z poziomem ważności, zgrupowane w `DetectionEvent` |
+| Detekcja | `detection/*` | sygnały z poziomem ważności, zgrupowane w `DetectionEvent`; zaufane profile (`profiles.py`) |
 | Korelacja | `correlation.py` | wynik, werdykt, wyjaśnienie |
 | Potok | `pipeline.py` | spina wszystko; ten sam kod dla `scan`, `sensor`, `analyze`, `replay` i ewaluacji |
-| Runtime | `runtime/store.py`, `runtime/sensor.py`, `runtime/replay.py` | baza SQLite, cykl życia alertów, sensor ciągły, odtwarzanie pcap |
-| Interfejs | `api/*`, `dashboard/` | API tylko do odczytu, panel operatora |
+| Runtime | `runtime/schema.sql`, `reader.py`, `writer.py`, `sensor.py`, `replay.py` | schemat bazy; odczyt (`StateReader`) oddzielony od zapisu (`StateWriter`); sensor ciągły, odtwarzanie pcap |
+| Interfejs | `cli/*`, `api/*`, `dashboard/` | polecenie `wiguard` (Typer + Rich), API tylko do odczytu (FastAPI), panel operatora (React) |
 
 **Model czasu.** Każda ramka niesie znacznik czasu przechwycenia z jądra/libpcap
 (`packet.time`). Ten sam znacznik jest zapisany w pliku pcap, więc analiza nagrania
@@ -133,8 +133,9 @@ SSID trafia do jego dowodów jako zdarzenie powiązane (`linked_from`).
   sygnałów, a nie przy każdym zapisie (co 5 s).
 * **Historia metryk** (RSSI, skew) — próbka na AP przy każdym zapisie, w którym AP
   był słyszany; maksymalnie 2000 próbek na AP.
-* **API** otwiera bazę SQLite w trybie `mode=ro` przy każdym żądaniu: fizycznie nie
-  może niczego zmienić. Brak bazy = pusty stan, baza ze złym schematem = 503 z
+* **API** dostaje wyłącznie `StateReader` — klasę bez metod zapisu — a ta otwiera
+  bazę SQLite w trybie `mode=ro`. Zapis jest więc niemożliwy na dwóch poziomach:
+  typów (sprawdza mypy) i samej bazy. Brak bazy = pusty stan, baza ze złym schematem = 503 z
   komunikatem.
 
 ## 7. Znane ograniczenia (do rozdziału o ograniczeniach)
@@ -154,7 +155,7 @@ SSID trafia do jego dowodów jako zdarzenie powiązane (`linked_from`).
 
 ## 8. Weryfikacja
 
-`pytest` (112 testów) obejmuje parser na rzeczywiście serializowanych ramkach,
+`pytest` (122 testy, w tym testy własnościowe hypothesis) obejmuje parser na rzeczywiście serializowanych ramkach,
 każdą cechę, każdy detektor (także przypadki, które **nie** mogą alarmować: jeden
 zegar, restart, zmiana kanału, jednorodna sieć firmowa), reguły projektowe
 korelacji, konfigurację, cykl życia alertów, tryb tylko do odczytu, API i CLI.
@@ -170,3 +171,32 @@ Scenariusze syntetyczne (`tests/pcap_fixtures/synthetic`, generowane przez
 | `classic_evil_twin`, `bssid_clone_with_deauth` | evil_twin |
 
 To testy regresyjne logiki, a nie dowód skuteczności w eterze.
+
+## 9. Struktura kodu i narzędzia
+
+```
+src/wiguard/
+  features/     ramki → profil AP (parser, IE, zegar, sekwencje, interwał, deauth)
+  detection/    cztery detektory + zaufane profile; wspólny format DetectionEvent
+  correlation.py  noisy-OR, werdykt, wyjaśnienie
+  pipeline.py   jeden potok dla wszystkich trybów
+  config.py     konfiguracja (pydantic) z walidacją config.yaml
+  capture/      karta w trybie monitor, skakanie po kanałach
+  runtime/      baza stanu (schema.sql, reader, writer), sensor, replay
+  api/          FastAPI: trasy, modele odpowiedzi → OpenAPI
+  cli/          polecenie `wiguard` (Typer) i raporty (Rich)
+  evaluation/   scenariusze syntetyczne i ich ocena
+dashboard/src/
+  api/          klient i typy generowane z OpenAPI, zapytania TanStack Query
+  components/   układ strony i elementy wspólne
+  views/        widoki (każdy pod własnym adresem URL)
+```
+
+| Warstwa | Narzędzia | Dlaczego |
+|---|---|---|
+| Konfiguracja i modele danych | pydantic | walidacja zamiast ręcznego parsowania; te same modele opisują API |
+| CLI | Typer, Rich | komendy jako typowane funkcje, czytelne tabele i werdykty w terminalu |
+| API | FastAPI | dokumentacja OpenAPI z modeli odpowiedzi |
+| Dashboard | TanStack Query, React Router, openapi-fetch | odświeżanie i pamięć podręczna bez własnego kodu, adres URL dla każdego widoku, typy generowane z API (klient i serwer nie mogą się rozjechać) |
+| Jakość | ruff, mypy `--strict`, pytest, hypothesis, Biome, Vitest | lint, typy i testy (także własnościowe) po obu stronach |
+| Środowisko | uv (`uv.lock`), npm (`package-lock.json`), GitHub Actions | odtwarzalne środowisko i te same bramki lokalnie (`make check`) i w CI |

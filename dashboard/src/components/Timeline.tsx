@@ -1,5 +1,5 @@
+import type { TimelineEntry } from "../api/types";
 import { dateTime } from "../lib/format";
-import type { TimelineEntry } from "../types";
 import { Empty } from "./ui";
 
 const KIND_LABEL: Record<string, string> = {

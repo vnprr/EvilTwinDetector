@@ -1,0 +1,2126 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "WiGuard API",
+    "description": "Read-only access to WiGuard's access points, alerts and evidence.",
+    "version": "0.3.0"
+  },
+  "paths": {
+    "/api/health": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Health",
+        "operationId": "health_api_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/stats": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Stats",
+        "operationId": "stats_api_stats_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Stats"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sensor": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Sensor",
+        "operationId": "sensor_api_sensor_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SensorStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/config": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Effective Config",
+        "operationId": "effective_config_api_config_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EffectiveConfig"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/trusted-profiles": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Trusted Profiles",
+        "operationId": "trusted_profiles_api_trusted_profiles_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrustedProfiles"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/aps": {
+      "get": {
+        "tags": [
+          "access points"
+        ],
+        "summary": "Access Points",
+        "operationId": "access_points_api_aps_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AccessPoint"
+                  },
+                  "type": "array",
+                  "title": "Response Access Points Api Aps Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/aps/{bssid}": {
+      "get": {
+        "tags": [
+          "access points"
+        ],
+        "summary": "Access Point",
+        "operationId": "access_point_api_aps__bssid__get",
+        "parameters": [
+          {
+            "name": "bssid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bssid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessPointDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/aps/{bssid}/metrics": {
+      "get": {
+        "tags": [
+          "access points"
+        ],
+        "summary": "Ap Metrics",
+        "operationId": "ap_metrics_api_aps__bssid__metrics_get",
+        "parameters": [
+          {
+            "name": "bssid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bssid"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 1,
+              "default": 500,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MetricSample"
+                  },
+                  "title": "Response Ap Metrics Api Aps  Bssid  Metrics Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/aps/{bssid}/timeline": {
+      "get": {
+        "tags": [
+          "access points"
+        ],
+        "summary": "Ap Timeline",
+        "operationId": "ap_timeline_api_aps__bssid__timeline_get",
+        "parameters": [
+          {
+            "name": "bssid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bssid"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TimelineEntry"
+                  },
+                  "title": "Response Ap Timeline Api Aps  Bssid  Timeline Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/alerts": {
+      "get": {
+        "tags": [
+          "alerts"
+        ],
+        "summary": "Alerts",
+        "operationId": "alerts_api_alerts_get",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^(open|resolved)$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "classification",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^(info|suspicious|evil_twin)$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Classification"
+            }
+          },
+          {
+            "name": "bssid",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Bssid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Alert"
+                  },
+                  "title": "Response Alerts Api Alerts Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/alerts/{alert_id}": {
+      "get": {
+        "tags": [
+          "alerts"
+        ],
+        "summary": "Alert",
+        "operationId": "alert_api_alerts__alert_id__get",
+        "parameters": [
+          {
+            "name": "alert_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Alert Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlertDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/events": {
+      "get": {
+        "tags": [
+          "alerts"
+        ],
+        "summary": "Events",
+        "operationId": "events_api_events_get",
+        "parameters": [
+          {
+            "name": "bssid",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Bssid"
+            }
+          },
+          {
+            "name": "module",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Module"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DetectionEventRow"
+                  },
+                  "title": "Response Events Api Events Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/timeline": {
+      "get": {
+        "tags": [
+          "alerts"
+        ],
+        "summary": "Timeline",
+        "operationId": "timeline_api_timeline_get",
+        "parameters": [
+          {
+            "name": "bssid",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Bssid"
+            }
+          },
+          {
+            "name": "after_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "After Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TimelineEntry"
+                  },
+                  "title": "Response Timeline Api Timeline Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/export/alerts.csv": {
+      "get": {
+        "tags": [
+          "export"
+        ],
+        "summary": "Export Alerts",
+        "operationId": "export_alerts_api_export_alerts_csv_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          }
+        }
+      }
+    },
+    "/api/export/aps.csv": {
+      "get": {
+        "tags": [
+          "export"
+        ],
+        "summary": "Export Access Points",
+        "operationId": "export_access_points_api_export_aps_csv_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          }
+        }
+      }
+    },
+    "/api/export/events.csv": {
+      "get": {
+        "tags": [
+          "export"
+        ],
+        "summary": "Export Events",
+        "operationId": "export_events_api_export_events_csv_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AccessPoint": {
+        "properties": {
+          "bssid": {
+            "type": "string",
+            "title": "Bssid"
+          },
+          "ssid": {
+            "type": "string",
+            "title": "Ssid"
+          },
+          "channels": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Channels"
+          },
+          "first_seen": {
+            "type": "number",
+            "title": "First Seen"
+          },
+          "last_seen": {
+            "type": "number",
+            "title": "Last Seen"
+          },
+          "frames": {
+            "type": "integer",
+            "title": "Frames"
+          },
+          "last_rssi_dbm": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Rssi Dbm"
+          },
+          "avg_rssi_dbm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Rssi Dbm"
+          },
+          "rssi_stddev": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rssi Stddev"
+          },
+          "clock_skew_ppm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clock Skew Ppm"
+          },
+          "dominant_ie_fingerprint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dominant Ie Fingerprint"
+          },
+          "vendor_ouis": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Vendor Ouis"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "clean",
+              "info",
+              "suspicious",
+              "evil_twin"
+            ],
+            "title": "Status"
+          },
+          "open_alert_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Open Alert Id"
+          },
+          "trusted": {
+            "type": "boolean",
+            "title": "Trusted"
+          }
+        },
+        "type": "object",
+        "required": [
+          "bssid",
+          "ssid",
+          "channels",
+          "first_seen",
+          "last_seen",
+          "frames",
+          "last_rssi_dbm",
+          "avg_rssi_dbm",
+          "rssi_stddev",
+          "clock_skew_ppm",
+          "dominant_ie_fingerprint",
+          "vendor_ouis",
+          "status",
+          "open_alert_id",
+          "trusted"
+        ],
+        "title": "AccessPoint"
+      },
+      "AccessPointDetail": {
+        "properties": {
+          "access_point": {
+            "$ref": "#/components/schemas/AccessPoint"
+          },
+          "summary": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Summary"
+          },
+          "alerts": {
+            "items": {
+              "$ref": "#/components/schemas/Alert"
+            },
+            "type": "array",
+            "title": "Alerts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "access_point",
+          "summary",
+          "alerts"
+        ],
+        "title": "AccessPointDetail"
+      },
+      "Alert": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "bssid": {
+            "type": "string",
+            "title": "Bssid"
+          },
+          "ssid": {
+            "type": "string",
+            "title": "Ssid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "resolved"
+            ],
+            "title": "Status"
+          },
+          "classification": {
+            "type": "string",
+            "enum": [
+              "info",
+              "suspicious",
+              "evil_twin"
+            ],
+            "title": "Classification"
+          },
+          "score": {
+            "type": "number",
+            "title": "Score"
+          },
+          "modules": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Modules"
+          },
+          "signal_names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Signal Names"
+          },
+          "explanation": {
+            "type": "string",
+            "title": "Explanation"
+          },
+          "first_seen": {
+            "type": "number",
+            "title": "First Seen"
+          },
+          "last_seen": {
+            "type": "number",
+            "title": "Last Seen"
+          },
+          "updates": {
+            "type": "integer",
+            "title": "Updates"
+          },
+          "resolved_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved At"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/Evidence"
+            },
+            "type": "array",
+            "title": "Evidence"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "bssid",
+          "ssid",
+          "status",
+          "classification",
+          "score",
+          "modules",
+          "signal_names",
+          "explanation",
+          "first_seen",
+          "last_seen",
+          "updates",
+          "resolved_at",
+          "evidence"
+        ],
+        "title": "Alert"
+      },
+      "AlertDetail": {
+        "properties": {
+          "alert": {
+            "$ref": "#/components/schemas/Alert"
+          },
+          "timeline": {
+            "items": {
+              "$ref": "#/components/schemas/TimelineEntry"
+            },
+            "type": "array",
+            "title": "Timeline"
+          }
+        },
+        "type": "object",
+        "required": [
+          "alert",
+          "timeline"
+        ],
+        "title": "AlertDetail"
+      },
+      "ApiSettings": {
+        "properties": {
+          "host": {
+            "type": "string",
+            "title": "Host",
+            "default": "127.0.0.1"
+          },
+          "port": {
+            "type": "integer",
+            "maximum": 65535.0,
+            "minimum": 1.0,
+            "title": "Port",
+            "default": 8765
+          },
+          "cors_origins": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Cors Origins",
+            "default": [
+              "http://localhost:5173",
+              "http://127.0.0.1:5173"
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ApiSettings"
+      },
+      "CaptureSettings": {
+        "properties": {
+          "interface": {
+            "type": "string",
+            "title": "Interface",
+            "default": "wlx00c0cab6d8f3"
+          },
+          "internal_interface": {
+            "type": "string",
+            "title": "Internal Interface",
+            "default": "wlo1"
+          },
+          "require_internal_connected": {
+            "type": "boolean",
+            "title": "Require Internal Connected",
+            "default": true
+          },
+          "channels": {
+            "items": {
+              "type": "integer",
+              "maximum": 196.0,
+              "minimum": 1.0
+            },
+            "type": "array",
+            "title": "Channels",
+            "default": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              36,
+              40,
+              44,
+              48,
+              52,
+              56,
+              60,
+              64,
+              100,
+              104,
+              108,
+              112,
+              116,
+              120,
+              124,
+              128,
+              132,
+              136,
+              140,
+              144,
+              149,
+              153,
+              157,
+              161,
+              165
+            ]
+          },
+          "dwell_seconds": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Dwell Seconds",
+            "default": 0.5
+          },
+          "monitor_settle_seconds": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Monitor Settle Seconds",
+            "default": 0.25
+          },
+          "channel_settle_seconds": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Channel Settle Seconds",
+            "default": 0.05
+          },
+          "restore_managed_on_exit": {
+            "type": "boolean",
+            "title": "Restore Managed On Exit",
+            "default": true
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "CaptureSettings"
+      },
+      "CorrelationSettings": {
+        "properties": {
+          "module_weights": {
+            "additionalProperties": {
+              "type": "number",
+              "maximum": 1.0,
+              "minimum": 0.0
+            },
+            "propertyNames": {
+              "$ref": "#/components/schemas/Module"
+            },
+            "type": "object",
+            "title": "Module Weights"
+          },
+          "suspicious_threshold": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Suspicious Threshold",
+            "default": 0.45
+          },
+          "evil_twin_threshold": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Evil Twin Threshold",
+            "default": 0.8
+          },
+          "min_score": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Min Score",
+            "default": 0.2
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "CorrelationSettings"
+      },
+      "DeauthStormSettings": {
+        "properties": {
+          "deauth_rate_threshold": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Deauth Rate Threshold",
+            "default": 10.0
+          },
+          "disassoc_rate_threshold": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Disassoc Rate Threshold",
+            "default": 5.0
+          },
+          "broadcast_rate_threshold": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Broadcast Rate Threshold",
+            "default": 5.0
+          },
+          "unicast_rate_threshold": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Unicast Rate Threshold",
+            "default": 5.0
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "DeauthStormSettings"
+      },
+      "DetectionEventRow": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "module": {
+            "type": "string",
+            "title": "Module"
+          },
+          "bssid": {
+            "type": "string",
+            "title": "Bssid"
+          },
+          "ssid": {
+            "type": "string",
+            "title": "Ssid"
+          },
+          "strength": {
+            "type": "number",
+            "title": "Strength"
+          },
+          "signal_names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Signal Names"
+          },
+          "first_seen": {
+            "type": "number",
+            "title": "First Seen"
+          },
+          "last_seen": {
+            "type": "number",
+            "title": "Last Seen"
+          },
+          "event": {
+            "$ref": "#/components/schemas/Evidence"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "module",
+          "bssid",
+          "ssid",
+          "strength",
+          "signal_names",
+          "first_seen",
+          "last_seen",
+          "event"
+        ],
+        "title": "DetectionEventRow"
+      },
+      "DetectionSettings": {
+        "properties": {
+          "identity": {
+            "$ref": "#/components/schemas/IdentitySettings",
+            "default": {
+              "trusted_profiles_path": ".wiguard/trusted-profiles.json",
+              "enrollment_min_frames": 50,
+              "min_frames": 10,
+              "clock_skew_delta_ppm": 5.0,
+              "rssi_shift_db": 12.0
+            }
+          },
+          "duplicate_bssid": {
+            "$ref": "#/components/schemas/DuplicateBssidSettings",
+            "default": {
+              "min_samples": 30,
+              "min_cluster_samples": 8,
+              "residual_gap_us": 10000.0,
+              "separation_factor": 4.0,
+              "min_transitions": 4,
+              "rssi_split_db": 10.0
+            }
+          },
+          "deauth_storm": {
+            "$ref": "#/components/schemas/DeauthStormSettings",
+            "default": {
+              "deauth_rate_threshold": 10.0,
+              "disassoc_rate_threshold": 5.0,
+              "broadcast_rate_threshold": 5.0,
+              "unicast_rate_threshold": 5.0
+            }
+          },
+          "environment_anomaly": {
+            "$ref": "#/components/schemas/EnvironmentAnomalySettings",
+            "default": {
+              "min_frames": 5,
+              "min_same_ssid_aps": 3,
+              "majority_ratio": 0.6,
+              "vendor_oui_distance_threshold": 0.75,
+              "ie_shape_distance_threshold": 0.45,
+              "beacon_interval_delta_tu": 20
+            }
+          },
+          "correlation": {
+            "$ref": "#/components/schemas/CorrelationSettings",
+            "default": {
+              "module_weights": {
+                "deauth_storm": 0.55,
+                "environment_anomaly": 0.6,
+                "identity_verification": 0.7
+              },
+              "suspicious_threshold": 0.45,
+              "evil_twin_threshold": 0.8,
+              "min_score": 0.2
+            }
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "DetectionSettings"
+      },
+      "DuplicateBssidSettings": {
+        "properties": {
+          "min_samples": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Min Samples",
+            "default": 30
+          },
+          "min_cluster_samples": {
+            "type": "integer",
+            "minimum": 2.0,
+            "title": "Min Cluster Samples",
+            "default": 8
+          },
+          "residual_gap_us": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Residual Gap Us",
+            "default": 10000.0
+          },
+          "separation_factor": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Separation Factor",
+            "default": 4.0
+          },
+          "min_transitions": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Min Transitions",
+            "default": 4
+          },
+          "rssi_split_db": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Rssi Split Db",
+            "default": 10.0
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "DuplicateBssidSettings"
+      },
+      "EffectiveConfig": {
+        "properties": {
+          "source_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Path"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/WiGuardConfig"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_path",
+          "settings"
+        ],
+        "title": "EffectiveConfig"
+      },
+      "EnvironmentAnomalySettings": {
+        "properties": {
+          "min_frames": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Min Frames",
+            "default": 5
+          },
+          "min_same_ssid_aps": {
+            "type": "integer",
+            "minimum": 3.0,
+            "title": "Min Same Ssid Aps",
+            "default": 3
+          },
+          "majority_ratio": {
+            "type": "number",
+            "maximum": 1.0,
+            "exclusiveMinimum": 0.5,
+            "title": "Majority Ratio",
+            "default": 0.6
+          },
+          "vendor_oui_distance_threshold": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Vendor Oui Distance Threshold",
+            "default": 0.75
+          },
+          "ie_shape_distance_threshold": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Ie Shape Distance Threshold",
+            "default": 0.45
+          },
+          "beacon_interval_delta_tu": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Beacon Interval Delta Tu",
+            "default": 20
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "EnvironmentAnomalySettings"
+      },
+      "Evidence": {
+        "properties": {
+          "module": {
+            "type": "string",
+            "title": "Module"
+          },
+          "bssid": {
+            "type": "string",
+            "title": "Bssid"
+          },
+          "ssid": {
+            "type": "string",
+            "title": "Ssid"
+          },
+          "strength": {
+            "type": "number",
+            "title": "Strength"
+          },
+          "signal_names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Signal Names"
+          },
+          "signals": {
+            "items": {
+              "$ref": "#/components/schemas/Signal"
+            },
+            "type": "array",
+            "title": "Signals"
+          },
+          "last_seen": {
+            "type": "number",
+            "title": "Last Seen"
+          },
+          "context": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "module",
+          "bssid",
+          "ssid",
+          "strength",
+          "signal_names",
+          "signals",
+          "last_seen",
+          "context"
+        ],
+        "title": "Evidence",
+        "description": "Everything one detector holds against one AP."
+      },
+      "FeatureSettings": {
+        "properties": {
+          "window_size": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Window Size",
+            "default": 300
+          },
+          "clock_min_samples": {
+            "type": "integer",
+            "minimum": 2.0,
+            "title": "Clock Min Samples",
+            "default": 50
+          },
+          "disruption_window_seconds": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Disruption Window Seconds",
+            "default": 10.0
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "FeatureSettings"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "Health": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "ok",
+            "title": "Status"
+          },
+          "state_path": {
+            "type": "string",
+            "title": "State Path"
+          },
+          "schema_version": {
+            "type": "integer",
+            "title": "Schema Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "state_path",
+          "schema_version"
+        ],
+        "title": "Health"
+      },
+      "IdentitySettings": {
+        "properties": {
+          "trusted_profiles_path": {
+            "type": "string",
+            "format": "path",
+            "title": "Trusted Profiles Path",
+            "default": ".wiguard/trusted-profiles.json"
+          },
+          "enrollment_min_frames": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Enrollment Min Frames",
+            "default": 50
+          },
+          "min_frames": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Min Frames",
+            "default": 10
+          },
+          "clock_skew_delta_ppm": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Clock Skew Delta Ppm",
+            "default": 5.0
+          },
+          "rssi_shift_db": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Rssi Shift Db",
+            "default": 12.0
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "IdentitySettings"
+      },
+      "MetricSample": {
+        "properties": {
+          "observed_at": {
+            "type": "number",
+            "title": "Observed At"
+          },
+          "frames": {
+            "type": "integer",
+            "title": "Frames"
+          },
+          "avg_rssi_dbm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Rssi Dbm"
+          },
+          "rssi_stddev": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rssi Stddev"
+          },
+          "clock_skew_ppm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clock Skew Ppm"
+          }
+        },
+        "type": "object",
+        "required": [
+          "observed_at",
+          "frames",
+          "avg_rssi_dbm",
+          "rssi_stddev",
+          "clock_skew_ppm"
+        ],
+        "title": "MetricSample"
+      },
+      "Module": {
+        "type": "string",
+        "enum": [
+          "identity_verification",
+          "deauth_storm",
+          "environment_anomaly"
+        ],
+        "title": "Module",
+        "description": "Independent evidence sources. Correlation weighs each one separately."
+      },
+      "RuntimeSettings": {
+        "properties": {
+          "state_path": {
+            "type": "string",
+            "format": "path",
+            "title": "State Path",
+            "default": ".wiguard/wiguard.db"
+          },
+          "flush_interval_seconds": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Flush Interval Seconds",
+            "default": 5.0
+          },
+          "evidence_window_seconds": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Evidence Window Seconds",
+            "default": 300.0
+          },
+          "alert_resolve_seconds": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Alert Resolve Seconds",
+            "default": 300.0
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "RuntimeSettings"
+      },
+      "SensorStatus": {
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "online",
+              "stale",
+              "replay",
+              "unknown"
+            ],
+            "title": "State"
+          },
+          "last_update": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Update"
+          },
+          "age_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Age Seconds"
+          },
+          "stale_after_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stale After Seconds"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "state",
+          "last_update",
+          "age_seconds",
+          "stale_after_seconds",
+          "detail",
+          "status"
+        ],
+        "title": "SensorStatus"
+      },
+      "Signal": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ],
+            "title": "Severity"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "details": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Details"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "severity",
+          "message",
+          "details"
+        ],
+        "title": "Signal"
+      },
+      "Stats": {
+        "properties": {
+          "schema_version": {
+            "type": "integer",
+            "title": "Schema Version"
+          },
+          "access_points": {
+            "type": "integer",
+            "title": "Access Points"
+          },
+          "detection_events": {
+            "type": "integer",
+            "title": "Detection Events"
+          },
+          "alerts": {
+            "type": "integer",
+            "title": "Alerts"
+          },
+          "open_alerts": {
+            "type": "integer",
+            "title": "Open Alerts"
+          },
+          "open_alerts_by_classification": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Open Alerts By Classification"
+          },
+          "timeline_entries": {
+            "type": "integer",
+            "title": "Timeline Entries"
+          },
+          "last_update": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Update"
+          }
+        },
+        "type": "object",
+        "required": [
+          "schema_version",
+          "access_points",
+          "detection_events",
+          "alerts",
+          "open_alerts",
+          "open_alerts_by_classification",
+          "timeline_entries",
+          "last_update"
+        ],
+        "title": "Stats"
+      },
+      "TimelineEntry": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "observed_at": {
+            "type": "number",
+            "title": "Observed At"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "bssid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bssid"
+          },
+          "ssid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ssid"
+          },
+          "alert_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alert Id"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "details": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Details"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "observed_at",
+          "kind",
+          "bssid",
+          "ssid",
+          "alert_id",
+          "message",
+          "details"
+        ],
+        "title": "TimelineEntry"
+      },
+      "TrustedProfile": {
+        "properties": {
+          "bssid": {
+            "type": "string",
+            "title": "Bssid"
+          },
+          "ssid": {
+            "type": "string",
+            "title": "Ssid"
+          },
+          "frames": {
+            "type": "integer",
+            "title": "Frames"
+          },
+          "ie_fingerprint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ie Fingerprint"
+          },
+          "avg_rssi_dbm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Rssi Dbm"
+          },
+          "rssi_stddev": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rssi Stddev"
+          },
+          "clock_skew_ppm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clock Skew Ppm"
+          },
+          "sequence_backward_jumps": {
+            "type": "integer",
+            "title": "Sequence Backward Jumps"
+          },
+          "enrolled_at": {
+            "type": "number",
+            "title": "Enrolled At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "bssid",
+          "ssid",
+          "frames",
+          "ie_fingerprint",
+          "avg_rssi_dbm",
+          "rssi_stddev",
+          "clock_skew_ppm",
+          "sequence_backward_jumps",
+          "enrolled_at"
+        ],
+        "title": "TrustedProfile"
+      },
+      "TrustedProfiles": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "profiles": {
+            "items": {
+              "$ref": "#/components/schemas/TrustedProfile"
+            },
+            "type": "array",
+            "title": "Profiles"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "path",
+          "profiles"
+        ],
+        "title": "TrustedProfiles"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "WiGuardConfig": {
+        "properties": {
+          "capture": {
+            "$ref": "#/components/schemas/CaptureSettings",
+            "default": {
+              "interface": "wlx00c0cab6d8f3",
+              "internal_interface": "wlo1",
+              "require_internal_connected": true,
+              "channels": [
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7,
+                8,
+                9,
+                10,
+                11,
+                12,
+                13,
+                36,
+                40,
+                44,
+                48,
+                52,
+                56,
+                60,
+                64,
+                100,
+                104,
+                108,
+                112,
+                116,
+                120,
+                124,
+                128,
+                132,
+                136,
+                140,
+                144,
+                149,
+                153,
+                157,
+                161,
+                165
+              ],
+              "dwell_seconds": 0.5,
+              "monitor_settle_seconds": 0.25,
+              "channel_settle_seconds": 0.05,
+              "restore_managed_on_exit": true
+            }
+          },
+          "features": {
+            "$ref": "#/components/schemas/FeatureSettings",
+            "default": {
+              "window_size": 300,
+              "clock_min_samples": 50,
+              "disruption_window_seconds": 10.0
+            }
+          },
+          "detection": {
+            "$ref": "#/components/schemas/DetectionSettings",
+            "default": {
+              "identity": {
+                "clock_skew_delta_ppm": 5.0,
+                "enrollment_min_frames": 50,
+                "min_frames": 10,
+                "rssi_shift_db": 12.0,
+                "trusted_profiles_path": ".wiguard/trusted-profiles.json"
+              },
+              "duplicate_bssid": {
+                "min_cluster_samples": 8,
+                "min_samples": 30,
+                "min_transitions": 4,
+                "residual_gap_us": 10000.0,
+                "rssi_split_db": 10.0,
+                "separation_factor": 4.0
+              },
+              "deauth_storm": {
+                "broadcast_rate_threshold": 5.0,
+                "deauth_rate_threshold": 10.0,
+                "disassoc_rate_threshold": 5.0,
+                "unicast_rate_threshold": 5.0
+              },
+              "environment_anomaly": {
+                "beacon_interval_delta_tu": 20,
+                "ie_shape_distance_threshold": 0.45,
+                "majority_ratio": 0.6,
+                "min_frames": 5,
+                "min_same_ssid_aps": 3,
+                "vendor_oui_distance_threshold": 0.75
+              },
+              "correlation": {
+                "evil_twin_threshold": 0.8,
+                "min_score": 0.2,
+                "module_weights": {
+                  "deauth_storm": 0.55,
+                  "environment_anomaly": 0.6,
+                  "identity_verification": 0.7
+                },
+                "suspicious_threshold": 0.45
+              }
+            }
+          },
+          "runtime": {
+            "$ref": "#/components/schemas/RuntimeSettings",
+            "default": {
+              "state_path": ".wiguard/wiguard.db",
+              "flush_interval_seconds": 5.0,
+              "evidence_window_seconds": 300.0,
+              "alert_resolve_seconds": 300.0
+            }
+          },
+          "api": {
+            "$ref": "#/components/schemas/ApiSettings",
+            "default": {
+              "host": "127.0.0.1",
+              "port": 8765,
+              "cors_origins": [
+                "http://localhost:5173",
+                "http://127.0.0.1:5173"
+              ]
+            }
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "WiGuardConfig"
+      }
+    }
+  }
+}

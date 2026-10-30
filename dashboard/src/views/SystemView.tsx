@@ -1,9 +1,9 @@
 import { Download } from "lucide-react";
-import { api, exportUrl } from "../api";
+import { exportUrl } from "../api/client";
+import { useConfig, useSensor, useTrustedProfiles } from "../api/queries";
+import type { EffectiveConfig, SensorStatus, Verdict } from "../api/types";
 import { Empty, Fact, Notice, Panel, StatusPill } from "../components/ui";
-import { usePolling } from "../hooks/usePolling";
 import { age, dateTime, MODULE_LABEL, ppm, ssidLabel } from "../lib/format";
-import type { EffectiveConfig, SensorStatus, Verdict } from "../types";
 
 const SENSOR_PILL: Record<SensorStatus["state"], Verdict> = {
   online: "clean",
@@ -12,9 +12,10 @@ const SENSOR_PILL: Record<SensorStatus["state"], Verdict> = {
   stale: "suspicious",
 };
 
-export function SystemView({ sensor }: { sensor: SensorStatus | null }) {
-  const profiles = usePolling("profiles", api.trustedProfiles, 30_000);
-  const config = usePolling("config", api.config, 60_000);
+export function SystemView() {
+  const { data: sensor } = useSensor();
+  const profiles = useTrustedProfiles();
+  const config = useConfig();
   const status = sensor?.status ?? {};
   const frames = (status.frames ?? {}) as Record<string, number>;
 
@@ -100,14 +101,16 @@ export function SystemView({ sensor }: { sensor: SensorStatus | null }) {
 }
 
 function ConfigSummary({ config }: { config: EffectiveConfig }) {
-  const { correlation, ...detectors } = config.detection;
+  const { correlation, ...detectors } = config.settings.detection;
   return (
     <>
       <p className="muted small">Source: {config.source_path ?? "built-in defaults"}</p>
       <h3>Correlation</h3>
-      <p className="muted small">score = 1 − Π(1 − weight × strength); strength is 1.0 / 0.6 / 0.3 for high / medium / low signals.</p>
+      <p className="muted small">
+        score = 1 − Π(1 − weight × strength); strength is 1.0 / 0.6 / 0.3 for high / medium / low signals.
+      </p>
       <div className="facts-grid">
-        {Object.entries(correlation.module_weights).map(([module, weight]) => (
+        {Object.entries(correlation.module_weights ?? {}).map(([module, weight]) => (
           <Fact key={module} label={`${MODULE_LABEL[module] ?? module} weight`} value={weight} />
         ))}
         <Fact label="Suspicious from" value={correlation.suspicious_threshold} />

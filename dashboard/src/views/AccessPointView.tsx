@@ -1,41 +1,34 @@
-import { api } from "../api";
+import { NavLink, useParams } from "react-router";
+import { useAccessPoint, useAccessPoints, useMetrics } from "../api/queries";
 import { Evidence } from "../components/Evidence";
 import { TrendChart } from "../components/TrendChart";
 import { Empty, Fact, Notice, Panel, RawJson, StatusPill } from "../components/ui";
-import { usePolling } from "../hooks/usePolling";
 import { dateTime, dbm, ppm, SCORE_HINT, score, shortHash, ssidLabel } from "../lib/format";
-import type { AccessPoint } from "../types";
 
-export function AccessPointView({ aps, selected, onSelect }: {
-  aps: AccessPoint[];
-  selected: string | null;
-  onSelect: (bssid: string) => void;
-}) {
-  const detail = usePolling(selected, () => api.accessPoint(selected ?? ""));
-  const metrics = usePolling(selected, () => api.metrics(selected ?? ""), 10_000);
+export function AccessPointView() {
+  const { bssid } = useParams();
+  const { data: aps = [] } = useAccessPoints();
+  const detail = useAccessPoint(bssid);
+  const metrics = useMetrics(bssid);
   const ap = detail.data?.access_point;
 
   return (
     <div className="split">
       <Panel title="Access points" className="compact-list">
         {aps.map((item) => (
-          <button
-            key={item.bssid}
-            className={`ap-choice ${item.bssid === selected ? "selected" : ""}`}
-            onClick={() => onSelect(item.bssid)}
-          >
+          <NavLink key={item.bssid} to={`/aps/${item.bssid}`} className="ap-choice">
             <StatusPill status={item.status} />
             <div>
               <strong>{ssidLabel(item.ssid)}</strong>
               <code>{item.bssid}</code>
             </div>
-          </button>
+          </NavLink>
         ))}
         {!aps.length && <Empty>No access points yet.</Empty>}
       </Panel>
 
       <Panel title="Access point" className="detail-panel">
-        {detail.error && <Notice tone="error">{detail.error}</Notice>}
+        {detail.error && <Notice tone="error">{detail.error.message}</Notice>}
         {ap && detail.data ? (
           <>
             <div className="detail-head">
@@ -48,7 +41,11 @@ export function AccessPointView({ aps, selected, onSelect }: {
               <Fact label="Frames" value={ap.frames} />
               <Fact label="RSSI" value={`${dbm(ap.avg_rssi_dbm)} ± ${ap.rssi_stddev ?? "–"}`} />
               <Fact label="Clock skew" value={ppm(ap.clock_skew_ppm)} />
-              <Fact label="IE fingerprint" value={shortHash(ap.dominant_ie_fingerprint)} title={ap.dominant_ie_fingerprint ?? ""} />
+              <Fact
+                label="IE fingerprint"
+                value={shortHash(ap.dominant_ie_fingerprint)}
+                title={ap.dominant_ie_fingerprint ?? ""}
+              />
               <Fact label="Vendor OUIs" value={ap.vendor_ouis.join(", ") || "–"} />
               <Fact label="First heard" value={dateTime(ap.first_seen)} />
               <Fact label="Last heard" value={dateTime(ap.last_seen)} />
@@ -63,7 +60,14 @@ export function AccessPointView({ aps, selected, onSelect }: {
             )}
             <h3>Trends</h3>
             <TrendChart title="RSSI" unit="dBm" samples={metrics.data ?? []} series="avg_rssi_dbm" color="#285a84" />
-            <TrendChart title="Clock skew" unit="ppm" samples={metrics.data ?? []} series="clock_skew_ppm" color="#c2410c" decimals={2} />
+            <TrendChart
+              title="Clock skew"
+              unit="ppm"
+              samples={metrics.data ?? []}
+              series="clock_skew_ppm"
+              color="#c2410c"
+              decimals={2}
+            />
             <h3>Alerts</h3>
             {detail.data.alerts.length ? (
               detail.data.alerts.map((alert) => (

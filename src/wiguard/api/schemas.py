@@ -1,4 +1,8 @@
-"""Response models of the read-only API (also its OpenAPI documentation at /docs)."""
+"""Response models of the API.
+
+They define the OpenAPI document (served at ``/openapi.json``, browsable at
+``/docs``), from which the dashboard's TypeScript types are generated.
+"""
 
 from __future__ import annotations
 
@@ -6,12 +10,11 @@ from typing import Any, Literal
 
 from pydantic import BaseModel
 
+from wiguard.config import WiGuardConfig
+from wiguard.detection import TrustedProfile
+
 Verdict = Literal["clean", "info", "suspicious", "evil_twin"]
-
-
-class Items[T](BaseModel):
-    count: int
-    items: list[T]
+AlertVerdict = Literal["info", "suspicious", "evil_twin"]
 
 
 class Health(BaseModel):
@@ -29,6 +32,48 @@ class Stats(BaseModel):
     open_alerts_by_classification: dict[str, int]
     timeline_entries: int
     last_update: float | None
+
+
+class SensorStatus(BaseModel):
+    state: Literal["online", "stale", "replay", "unknown"]
+    last_update: float | None
+    age_seconds: float | None
+    stale_after_seconds: float | None
+    detail: str
+    status: dict[str, Any] | None
+    """What the sensor (or replay) last reported about itself."""
+
+
+class EffectiveConfig(BaseModel):
+    source_path: str | None
+    """The file the API loaded; ``None`` means built-in defaults."""
+    settings: WiGuardConfig
+
+
+class TrustedProfiles(BaseModel):
+    path: str
+    profiles: list[TrustedProfile]
+    error: str | None = None
+
+
+class Signal(BaseModel):
+    name: str
+    severity: Literal["low", "medium", "high"]
+    message: str
+    details: dict[str, Any]
+
+
+class Evidence(BaseModel):
+    """Everything one detector holds against one AP."""
+
+    module: str
+    bssid: str
+    ssid: str
+    strength: float
+    signal_names: list[str]
+    signals: list[Signal]
+    last_seen: float
+    context: dict[str, Any]
 
 
 class AccessPoint(BaseModel):
@@ -55,7 +100,7 @@ class Alert(BaseModel):
     bssid: str
     ssid: str
     status: Literal["open", "resolved"]
-    classification: Verdict
+    classification: AlertVerdict
     score: float
     modules: list[str]
     signal_names: list[str]
@@ -64,7 +109,7 @@ class Alert(BaseModel):
     last_seen: float
     updates: int
     resolved_at: float | None
-    evidence: list[dict[str, Any]]
+    evidence: list[Evidence]
 
 
 class TimelineEntry(BaseModel):
@@ -81,6 +126,7 @@ class TimelineEntry(BaseModel):
 class AccessPointDetail(BaseModel):
     access_point: AccessPoint
     summary: dict[str, Any]
+    """The full feature summary (IE, clock fit, timing, sequence statistics)."""
     alerts: list[Alert]
 
 
@@ -106,20 +152,4 @@ class DetectionEventRow(BaseModel):
     signal_names: list[str]
     first_seen: float
     last_seen: float
-    event: dict[str, Any]
-
-
-class SensorStatus(BaseModel):
-    state: Literal["online", "stale", "replay", "unknown"]
-    last_update: float | None
-    age_seconds: float | None
-    stale_after_seconds: float | None
-    detail: str
-    status: dict[str, Any] | None
-
-
-class TrustedProfiles(BaseModel):
-    path: str
-    enrolled: int
-    profiles: list[dict[str, Any]]
-    error: str | None = None
+    event: Evidence

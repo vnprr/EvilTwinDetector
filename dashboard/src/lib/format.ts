@@ -1,4 +1,4 @@
-import type { Verdict } from "../types";
+import type { Verdict } from "../api/types";
 
 export const VERDICT_LABEL: Record<Verdict, string> = {
   clean: "Clean",
@@ -9,7 +9,8 @@ export const VERDICT_LABEL: Record<Verdict, string> = {
 
 const VERDICT_RANK: Record<Verdict, number> = { clean: 0, info: 1, suspicious: 2, evil_twin: 3 };
 
-export const byVerdict = (a: { status: Verdict }, b: { status: Verdict }) => VERDICT_RANK[b.status] - VERDICT_RANK[a.status];
+export const byVerdict = (a: { status: Verdict }, b: { status: Verdict }) =>
+  VERDICT_RANK[b.status] - VERDICT_RANK[a.status];
 
 export const MODULE_LABEL: Record<string, string> = {
   identity_verification: "Identity",

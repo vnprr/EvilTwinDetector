@@ -1,10 +1,17 @@
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import type { MetricSample } from "../api/types";
 import { clock, dateTime } from "../lib/format";
-import type { MetricSample } from "../types";
 
 type Series = "avg_rssi_dbm" | "clock_skew_ppm";
 
-export function TrendChart({ title, unit, samples, series, color, decimals = 0 }: {
+export function TrendChart({
+  title,
+  unit,
+  samples,
+  series,
+  color,
+  decimals = 0,
+}: {
   title: string;
   unit: string;
   samples: MetricSample[];

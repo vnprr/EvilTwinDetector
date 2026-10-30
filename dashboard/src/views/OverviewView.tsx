@@ -1,10 +1,16 @@
 import { Check } from "lucide-react";
-import { Panel, StatusPill, Empty } from "../components/ui";
+import { useNavigate } from "react-router";
+import { useAccessPoints } from "../api/queries";
+import { Empty, Panel, StatusPill } from "../components/ui";
 import { byVerdict, dbm, ppm, ssidLabel } from "../lib/format";
-import type { AccessPoint } from "../types";
 
-export function OverviewView({ aps, onSelect }: { aps: AccessPoint[]; onSelect: (bssid: string) => void }) {
-  const sorted = [...aps].sort((a, b) => byVerdict(a, b) || a.ssid.localeCompare(b.ssid) || a.bssid.localeCompare(b.bssid));
+export function OverviewView() {
+  const navigate = useNavigate();
+  const { data: aps = [] } = useAccessPoints();
+  const sorted = [...aps].sort(
+    (a, b) => byVerdict(a, b) || a.ssid.localeCompare(b.ssid) || a.bssid.localeCompare(b.bssid),
+  );
+
   return (
     <Panel title="Access points" sub="Every AP heard by the sensor, most serious verdict first.">
       {sorted.length ? (
@@ -24,15 +30,19 @@ export function OverviewView({ aps, onSelect }: { aps: AccessPoint[]; onSelect: 
             </thead>
             <tbody>
               {sorted.map((ap) => (
-                <tr key={ap.bssid} onClick={() => onSelect(ap.bssid)}>
-                  <td><StatusPill status={ap.status} /></td>
+                <tr key={ap.bssid} onClick={() => navigate(`/aps/${ap.bssid}`)}>
+                  <td>
+                    <StatusPill status={ap.status} />
+                  </td>
                   <td className="strong">{ssidLabel(ap.ssid)}</td>
-                  <td><code>{ap.bssid}</code></td>
+                  <td>
+                    <code>{ap.bssid}</code>
+                  </td>
                   <td>{ap.channels.join(", ") || "–"}</td>
                   <td>{dbm(ap.avg_rssi_dbm)}</td>
                   <td>{ppm(ap.clock_skew_ppm)}</td>
                   <td>{ap.frames}</td>
-                  <td>{ap.trusted ? <Check size={16} aria-label="trusted" /> : ""}</td>
+                  <td>{ap.trusted && <Check size={16} aria-label="trusted" />}</td>
                 </tr>
               ))}
             </tbody>

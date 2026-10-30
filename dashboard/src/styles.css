@@ -136,6 +136,12 @@ h3 {
   text-align: left;
 }
 
+a.nav-button,
+a.alert-row,
+a.ap-choice {
+  text-decoration: none;
+}
+
 .nav-button:hover,
 .nav-button.active {
   background: #30392e;
@@ -446,7 +452,7 @@ select {
 .alert-row:hover,
 .alert-row.selected,
 .ap-choice:hover,
-.ap-choice.selected {
+.ap-choice.active {
   border-color: var(--line-strong);
   background: var(--surface-strong);
 }
@@ -672,4 +678,8 @@ select {
   .nav-button {
     width: auto;
   }
+}
+
+.detail-head a {
+  color: inherit;
 }

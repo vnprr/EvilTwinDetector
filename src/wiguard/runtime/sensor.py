@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -11,7 +12,9 @@ from wiguard.capture import ChannelHoppingCapture
 from wiguard.config import WiGuardConfig
 from wiguard.pipeline import DetectionPipeline
 
-from .store import RecordSummary, RuntimeStore
+from .writer import RecordSummary, StateWriter
+
+log = logging.getLogger(__name__)
 
 FlushCallback = Callable[[RecordSummary], None]
 
@@ -39,7 +42,7 @@ class Sensor:
         self._next_flush = 0.0
 
     def run(self, *, duration_seconds: float | None = None) -> RecordSummary:
-        with RuntimeStore.open(self.state_path) as store:
+        with StateWriter.open(self.state_path) as store:
             self._next_flush = time.time() + self.config.runtime.flush_interval_seconds
 
             def tick(*_: Any) -> None:
@@ -56,7 +59,7 @@ class Sensor:
                 summary = self.flush(store)
         return summary
 
-    def flush(self, store: RuntimeStore) -> RecordSummary:
+    def flush(self, store: StateWriter) -> RecordSummary:
         runtime = self.config.runtime
         now = time.time()
         result = self.pipeline.evaluate(now=now, evidence_window=runtime.evidence_window_seconds)
@@ -76,6 +79,14 @@ class Sensor:
             }
         )
         self._next_flush = now + runtime.flush_interval_seconds
+        if summary.alerts_opened or summary.alerts_escalated or summary.alerts_resolved:
+            log.info(
+                "%d open alert(s): %d new, %d escalated, %d resolved",
+                summary.open_alerts, summary.alerts_opened, summary.alerts_escalated,
+                summary.alerts_resolved,
+            )  # fmt: skip
+        else:
+            log.debug("Flush: %d APs, %d open alert(s)", summary.access_points, summary.open_alerts)
         if self.on_flush is not None:
             self.on_flush(summary)
         return summary

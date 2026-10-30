@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import time
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
@@ -13,7 +14,9 @@ from wiguard.config import CaptureSettings
 
 from .adapter import AdapterError, MonitorAdapter
 
-PacketCallback = Callable[[Any], None]
+log = logging.getLogger(__name__)
+
+PacketCallback = Callable[[Any], object]
 HopCallback = Callable[[int, str | None], None]
 """Called after every channel change with the channel and an error (or ``None``)."""
 
@@ -69,6 +72,8 @@ class ChannelHoppingCapture:
                     self.stats.hops += 1
                     if error is not None:
                         self.stats.failed_hops += 1
+                        if channel not in self.stats.channel_errors:
+                            log.warning("Cannot tune to channel %d: %s", channel, error)
                         self.stats.channel_errors[channel] = error
                     if on_hop is not None:
                         on_hop(channel, error)
@@ -84,6 +89,7 @@ class ChannelHoppingCapture:
                     )
         except KeyboardInterrupt:
             self.stats.interrupted = True
+            log.info("Capture interrupted; keeping what was captured.")
         finally:
             if settings.restore_managed_on_exit:
                 self.adapter.restore_managed()

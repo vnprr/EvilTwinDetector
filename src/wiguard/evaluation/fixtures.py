@@ -2,58 +2,48 @@
 
 from __future__ import annotations
 
-import json
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Literal, get_args
 
-VERDICTS = ("clean", "info", "suspicious", "evil_twin")
-MANIFEST_SCHEMA_VERSION = 2
+from pydantic import BaseModel, ConfigDict, Field
+
+Verdict = Literal["clean", "info", "suspicious", "evil_twin"]
+VERDICTS: tuple[Verdict, ...] = get_args(Verdict)
 
 
-@dataclass(frozen=True)
-class Scenario:
+class Scenario(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     name: str
-    pcap: Path
-    expected_classification: str
     description: str = ""
+    pcap: Path
     enrollment_pcap: Path | None = None
     """Known-good capture to enroll trusted profiles from before the analysis."""
+    expected_classification: Verdict
     target_bssid: str | None = None
     """The AP the verdict is about; ``None`` means the strongest alert overall."""
     expected_modules: tuple[str, ...] = ()
     expected_signals: tuple[str, ...] = ()
 
 
+class Manifest(BaseModel):
+    schema_version: Literal[2] = 2
+    source: str = ""
+    limitations: str = ""
+    scenarios: list[Scenario] = Field(min_length=1)
+
+
 def load_manifest(path: Path | str) -> list[Scenario]:
-    manifest_path = Path(path)
-    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
-    if payload.get("schema_version") != MANIFEST_SCHEMA_VERSION:
-        raise ValueError(
-            f"{manifest_path}: expected schema_version {MANIFEST_SCHEMA_VERSION}, "
-            f"got {payload.get('schema_version')!r}"
+    """Scenarios with their capture paths resolved relative to the manifest."""
+    path = Path(path)
+    manifest = Manifest.model_validate_json(path.read_bytes())
+    return [
+        scenario.model_copy(
+            update={
+                "pcap": path.parent / scenario.pcap,
+                "enrollment_pcap": scenario.enrollment_pcap
+                and path.parent / scenario.enrollment_pcap,
+            }
         )
-    scenarios = payload.get("scenarios")
-    if not isinstance(scenarios, list) or not scenarios:
-        raise ValueError(f"{manifest_path}: 'scenarios' must be a non-empty list")
-    return [_scenario(item, manifest_path.parent) for item in scenarios]
-
-
-def _scenario(item: dict[str, Any], base: Path) -> Scenario:
-    name = item.get("name")
-    if not isinstance(name, str) or not name:
-        raise ValueError(f"scenario without a name: {item!r}")
-    expected = item.get("expected_classification")
-    if expected not in VERDICTS:
-        raise ValueError(f"{name}: expected_classification must be one of {VERDICTS}")
-    enrollment = item.get("enrollment_pcap")
-    return Scenario(
-        name=name,
-        pcap=base / str(item["pcap"]),
-        expected_classification=expected,
-        description=str(item.get("description", "")),
-        enrollment_pcap=base / enrollment if enrollment else None,
-        target_bssid=str(item["target_bssid"]).lower() if item.get("target_bssid") else None,
-        expected_modules=tuple(item.get("expected_modules", [])),
-        expected_signals=tuple(item.get("expected_signals", [])),
-    )
+        for scenario in manifest.scenarios
+    ]

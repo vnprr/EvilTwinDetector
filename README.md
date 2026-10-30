@@ -37,13 +37,15 @@ Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Install
 
-Python 3.12+ and (for the dashboard) Node 20+.
+Python 3.12+ with [uv](https://docs.astral.sh/uv/), and Node 20+ for the dashboard.
 
 ```bash
-python -m venv .venv
-.venv/bin/pip install -e ".[dev]"
-cd dashboard && npm ci
+make install        # = uv sync --frozen && (cd dashboard && npm ci)
 ```
+
+Every dependency is pinned in `uv.lock` and `dashboard/package-lock.json`, so the
+environment is reproducible. Commands below use `uv run wiguard …`; inside an
+activated virtualenv plain `wiguard …` works too.
 
 ## Try it without hardware
 
@@ -51,15 +53,15 @@ Synthetic scenarios (correctly formed 802.11 frames written to pcap files) are
 committed under `tests/pcap_fixtures/synthetic`:
 
 ```bash
-.venv/bin/wiguard fixtures evaluate tests/pcap_fixtures/synthetic/manifest.json
+uv run wiguard fixtures evaluate tests/pcap_fixtures/synthetic/manifest.json
 
 # Enroll the "home" network from a known-good capture, then analyse an attack.
-.venv/bin/wiguard enroll --pcap tests/pcap_fixtures/synthetic/enroll_home.pcap
-.venv/bin/wiguard analyze tests/pcap_fixtures/synthetic/classic_evil_twin.pcap
+uv run wiguard enroll --pcap tests/pcap_fixtures/synthetic/enroll_home.pcap
+uv run wiguard analyze tests/pcap_fixtures/synthetic/classic_evil_twin.pcap
 
 # Replay the attack into a state database and look at it in the dashboard.
-.venv/bin/wiguard replay tests/pcap_fixtures/synthetic/classic_evil_twin.pcap --state-path /tmp/demo.db
-.venv/bin/wiguard api --state-path /tmp/demo.db
+uv run wiguard replay tests/pcap_fixtures/synthetic/classic_evil_twin.pcap --state-path /tmp/demo.db
+uv run wiguard api --state-path /tmp/demo.db
 (cd dashboard && npm run dev)        # http://127.0.0.1:5173
 ```
 
@@ -82,7 +84,7 @@ sudo .venv/bin/wiguard scan --duration 60
 
 # 2b. … or the long-running sensor feeding the dashboard.
 sudo .venv/bin/wiguard sensor
-.venv/bin/wiguard api
+uv run wiguard api
 ```
 
 Enrollment is always an explicit command: learning automatically would also
@@ -113,7 +115,9 @@ All endpoints are `GET`; the database is opened read-only on every request.
 `/api/health`, `/api/stats`, `/api/sensor`, `/api/config`, `/api/trusted-profiles`,
 `/api/aps`, `/api/aps/{bssid}`, `/api/aps/{bssid}/metrics`, `/api/aps/{bssid}/timeline`,
 `/api/alerts`, `/api/alerts/{id}`, `/api/events`, `/api/timeline`,
-`/api/export/{alerts,aps,events}.csv`, and `WS /ws/live` for timeline updates.
+`/api/export/{alerts,aps,events}.csv`, and the WebSocket `/api/live` for timeline updates.
+The response models generate the OpenAPI document (`/docs`) and, from it, the
+dashboard's TypeScript types (`make api-types`), so client and server cannot drift apart.
 
 Alerts are incidents: one open alert per AP, updated while evidence keeps
 arriving, escalated when the verdict gets worse, resolved after
@@ -122,11 +126,18 @@ arriving, escalated when the verdict gets worse, resolved after
 ## Development
 
 ```bash
-.venv/bin/pytest                 # unit, integration and API tests
-.venv/bin/ruff check src tests   # lint
-.venv/bin/ruff format src tests  # format
-(cd dashboard && npm run build)  # typecheck + production build
+make check          # everything CI runs: lint, types, tests (Python and dashboard)
+make demo           # replay the classic Evil Twin scenario and serve it to the dashboard
+make api-types      # after changing the API: regenerate openapi.json and the TS types
 ```
+
+| Layer | Tools |
+|---|---|
+| Python | pydantic (config, API models, profile files), Typer + Rich (CLI), FastAPI, Scapy, stdlib `sqlite3` |
+| Python quality | ruff (lint + format), mypy `--strict`, pytest, hypothesis (property-based tests) |
+| Dashboard | React 19, TanStack Query (server state), React Router (one URL per view), openapi-fetch + generated types, Recharts |
+| Dashboard quality | TypeScript strict, Biome (lint + format), Vitest + Testing Library |
+| Delivery | uv (locked Python environment), GitHub Actions (`.github/workflows/ci.yml`) |
 
 Synthetic scenarios validate detector logic, not radio-frequency reality; the
 experimental evaluation on real hardware is planned in

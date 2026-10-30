@@ -17,13 +17,13 @@ from scapy.utils import PcapReader
 from wiguard.config import WiGuardConfig
 from wiguard.pipeline import DetectionPipeline
 
-from .store import RecordSummary, RuntimeStore
+from .writer import RecordSummary, StateWriter
 
 
 def replay_pcap(
     pcap: Path | str,
     config: WiGuardConfig,
-    store: RuntimeStore,
+    store: StateWriter,
     *,
     step_seconds: float | None = None,
 ) -> RecordSummary:

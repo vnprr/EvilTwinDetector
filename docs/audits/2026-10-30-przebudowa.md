@@ -64,3 +64,24 @@ Testów na prawdziwym RF. Ani testy, ani scenariusze syntetyczne nie mówią nic
 skuteczności w eterze; to zadanie eksperymentów z [THESIS-PLAN.md](../THESIS-PLAN.md).
 Wymagają one ponownego enrollmentu (zmienił się format fingerprintu IE i plik
 profili) oraz nowej bazy stanu (schemat 3).
+
+## Runda 2 — modernizacja narzędzi i struktury (30.10.2026)
+
+Zasada: biblioteka wchodzi tylko wtedy, gdy usuwa własny kod albo ręczną duplikację.
+
+| Zmiana | Co zastępuje | Zysk |
+|---|---|---|
+| **Typer + Rich** (`cli/`) | ~300 linii argparse z parserami-rodzicami i `getattr` | komendy jako typowane funkcje; tabele, kolorowe werdykty, czytelne błędy |
+| **logging** (RichHandler) | `print` w sensorze i przechwytywaniu | poziomy logów, `--verbose`, JSON na stdout nie miesza się z logami |
+| **pydantic** dla pliku profili i manifestu scenariuszy | ręczne `from_dict`, `_optional`, walidatory | walidacja jednym wywołaniem, ten sam model w API |
+| **`StateReader` / `StateWriter`** + `schema.sql` | jedna klasa `RuntimeStore` (500 linii), SQL w stringu, 14 pozycyjnych `?` | API dostaje klasę bez metod zapisu (gwarancja typów + `mode=ro`), parametry nazwane, schemat czytelny jako plik SQL |
+| **APIRouter** (`api/routes.py`), typowane modele dowodów | funkcje zagnieżdżone w `create_app`, `dict[str, Any]`, koperty `{count, items}` | pełny dokument OpenAPI, prostsze odpowiedzi (listy) |
+| **openapi-typescript + openapi-fetch** | ręcznie przepisany `types.ts` (170 linii) i klient `fetch` | typy dashboardu generowane z API; test i CI pilnują, że są aktualne |
+| **TanStack Query** | własny hook `usePolling` | cache, odświeżanie, stany błędów — standardowo |
+| **React Router** | widok w `useState` | adres URL dla każdego widoku i alertu (zakładki, przycisk „wstecz”, filtry w URL) |
+| **mypy `--strict`**, **hypothesis**, **Biome**, **Vitest** | brak | typy sprawdzane statycznie; testy własnościowe (fuzzing parsera, monotoniczność wyniku); lint i testy dashboardu |
+| **uv + `uv.lock`**, **Makefile**, **GitHub Actions** | `pip install -e` bez blokady wersji | odtwarzalne środowisko; `make check` = to samo co CI |
+
+Wynik: `make check` — ruff, mypy (40 plików), Biome, 122 testy pytest (1 pominięty —
+wymaga nagrania z karty), 5 testów Vitest; test w Chromium wszystkich widoków i
+bezpośrednich linków: 0 błędów konsoli, 0 odpowiedzi 500.

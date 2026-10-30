@@ -1,13 +1,19 @@
 import { AlertTriangle, Info } from "lucide-react";
 import type { ReactNode } from "react";
+import type { Verdict } from "../api/types";
 import { VERDICT_LABEL } from "../lib/format";
-import type { Verdict } from "../types";
 
 export function StatusPill({ status, label }: { status: Verdict; label?: string }) {
   return <span className={`status status-${status}`}>{label ?? VERDICT_LABEL[status]}</span>;
 }
 
-export function Panel({ title, sub, actions, children, className = "" }: {
+export function Panel({
+  title,
+  sub,
+  actions,
+  children,
+  className = "",
+}: {
   title: string;
   sub?: ReactNode;
   actions?: ReactNode;
@@ -37,7 +43,17 @@ export function Fact({ label, value, title }: { label: string; value: ReactNode;
   );
 }
 
-export function Metric({ icon, label, value, hint }: { icon: ReactNode; label: string; value: ReactNode; hint?: string }) {
+export function Metric({
+  icon,
+  label,
+  value,
+  hint,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: ReactNode;
+  hint?: string;
+}) {
   return (
     <div className="metric">
       <div className="metric-icon">{icon}</div>

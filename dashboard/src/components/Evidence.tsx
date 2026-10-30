@@ -1,14 +1,17 @@
+import type { Evidence as EvidenceItem } from "../api/types";
 import { MODULE_LABEL, ssidLabel } from "../lib/format";
-import type { Evidence as EvidenceItem } from "../types";
 
 /** One card per detector: which signals fired, why, and from which AP. */
 export function Evidence({ items }: { items: EvidenceItem[] }) {
   return (
     <div className="evidence-list">
-      {items.map((item, index) => {
+      {items.map((item) => {
         const linkedFrom = item.context.linked_from as string | undefined;
         return (
-          <article className="evidence" key={`${item.module}-${item.bssid}-${index}`}>
+          <article
+            className="evidence"
+            key={`${item.module}:${item.context.detector ?? ""}:${linkedFrom ?? item.bssid}`}
+          >
             <header>
               <strong>{MODULE_LABEL[item.module] ?? item.module}</strong>
               {linkedFrom && (

@@ -128,7 +128,7 @@ class CorrelationEngine:
             strongest[event.module] = max(strongest.get(event.module, 0.0), event.strength)
         disbelief = math.prod(
             1.0 - self.module_weights.get(module, 0.0) * strength
-            for module, strength in strongest.items()
+            for module, strength in sorted(strongest.items())  # fixed order: exact floats
         )
         return round(1.0 - disbelief, 3)
 
