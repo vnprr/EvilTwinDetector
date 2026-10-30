@@ -133,6 +133,7 @@ Useful endpoints:
 - `GET /api/aps`
 - `GET /api/aps/{bssid}`
 - `GET /api/aps/{bssid}/timeline`
+- `GET /api/aps/{bssid}/metrics` — per-AP RSSI/clock-skew history for trend plots
 - `GET /api/alerts`
 - `GET /api/alerts/{alert_key}`
 - `GET /api/events`
@@ -161,6 +162,17 @@ The frontend reads `VITE_WIGUARD_API_BASE`, defaulting to `http://127.0.0.1:8765
 ```
 
 Then open the Vite URL from `npm run dev`. The first screen is the operator dashboard: AP overview, alert inspection, AP detail, live activity timeline, and a System view (sensor health, trusted-baseline status, the effective configuration, and CSV export). The dashboard stays read-only.
+
+## Replay A PCAP Into The Dashboard
+
+Run the full offline detection pipeline on a saved capture and persist the
+result to a runtime database the dashboard can open. The database is marked as
+a replay import (not a live feed), and the dashboard stays read-only:
+
+```bash
+.venv/bin/wiguard-replay /tmp/wiguard_alfa_beacons.pcap --state-path /tmp/replay.db
+.venv/bin/wiguard-api --state-path /tmp/replay.db --host 127.0.0.1 --port 8765
+```
 
 ## Analyze A PCAP
 
